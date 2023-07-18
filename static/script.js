@@ -1,7 +1,7 @@
 const QUERY = document.getElementById("download-field")
 const BUTTON = document.getElementById("download-button")
 
-const url = "http://localhost:3000"
+const url = window.location.href
 
 async function post(url, body)
 {
