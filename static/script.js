@@ -2,6 +2,7 @@ const QUERY = document.getElementById("download-field")
 const BUTTON = document.getElementById("download-button")
 
 const url = window.location.href
+console.log(url)
 
 async function post(url, body)
 {
