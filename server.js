@@ -80,8 +80,6 @@ app.post("/", async (req, res) =>
    const token = await SpotifyApi.getSpotifyToken(process.env.CLIENT_ID, process.env.CLIENT_SECRET)
    let info = await SpotifyApi.getQueryInfo(token, query)
 
-   console.log(info)
-
    /*info = {
       id: '4JJk011GtXda1dBAyGzrqa',
       type: 'playlist',
@@ -255,5 +253,8 @@ function youtubeDL(url, path, opts={}, events={progress: null, complete: null})
       });
    });
 }
+
+youtubeDL(`https://youtu.be/h8k3ifqVByI`, `./tracks/Deftones - Damone.m4a`, { filter: "audioonly" } )
+
 
 app.listen(PORT);
