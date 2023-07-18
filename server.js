@@ -254,10 +254,7 @@ function youtubeDL(url, path, opts={}, events={progress: null, complete: null})
    });
 }
 
-fs.writeFile("./tracks/Deftones - Damone.m4a", "test", ()=>{})
-fs.readFile("./tracks/Deftones - Damone.m4a", "utf8", (err, data) => console.log(data))
-
-//youtubeDL(`https://youtu.be/h8k3ifqVByI`, `./tracks/Deftones - Damone.m4a`, { filter: "audioonly" } )
+youtubeDL(`https://youtu.be/h8k3ifqVByI`, `./tracks/Deftones - Damone.m4a`, { filter: "audioonly" } )
 
 
 app.listen(PORT);
