@@ -35,7 +35,6 @@ BUTTON.addEventListener("click", async () =>
    let res = await post(url, {query: query}).then(res => res.json())
 
 
-   console.log(res.id)
    recursiveCheckID(res.id)
 
    async function recursiveCheckID(id)
@@ -45,8 +44,6 @@ BUTTON.addEventListener("click", async () =>
       try
       {
          let resJSON = await res.json()
-
-         console.log(resJSON)
 
          setProgress(resJSON.progresscount, resJSON.totalcount)
 

@@ -1,6 +1,7 @@
+const fs = require("fs")
 const SpotifyApi = require("./SpotifyApi.js");
 const { search } = require("libmuse");
-const YTDlpWrap = require("yt-dlp-wrap").default;
+const ytdl = require("ytdl-core");
 const sanitize = require("sanitize-filename");
 
 if (process.env.NODE_ENV !== "production") require("dotenv").config()
@@ -28,7 +29,7 @@ function delItem(itemID, timeout=180)
       {
          let path = `./tracks/${index[itemID].filename}`
 
-         require("fs").unlinkSync(path)
+         fs.unlinkSync(path)
          delete index[itemID]
       }
 
@@ -47,6 +48,8 @@ app.get("/download", (req, res) =>
    }
    else
    {
+      const UPDATEINTERVAL = 100
+
       let interval = setInterval(() =>
       {
          let curInfo = index[req.query.id]
@@ -63,7 +66,7 @@ app.get("/download", (req, res) =>
             res.send({progresscount: (totalcount * curInfo.progress / 100), totalcount: totalcount})
             clearInterval(interval)
          }
-      }, 100)
+      }, UPDATEINTERVAL)
    }
 })
 app.get("/*", (req, res) => res.status(404).sendFile(staticDIR + "404.html"))
@@ -76,6 +79,8 @@ app.post("/", async (req, res) =>
 
    const token = await SpotifyApi.getSpotifyToken(process.env.CLIENT_ID, process.env.CLIENT_SECRET)
    let info = await SpotifyApi.getQueryInfo(token, query)
+
+   console.log(info)
 
    /*info = {
       id: '4JJk011GtXda1dBAyGzrqa',
@@ -106,7 +111,6 @@ app.post("/", async (req, res) =>
    }*/
 
    const TRACKFORMAT = "m4a"
-   const YTDlp = new YTDlpWrap("./yt-dlp.exe")
 
    addIndexInfo(info)
 
@@ -131,20 +135,23 @@ app.post("/", async (req, res) =>
 
       let searchID = await search(track.query, { limit: 1 }).then(data => data.categories[0].results[0].videoId);
 
-      YTDlp.exec([`youtu.be/${searchID}`, "-f", "m4a/bestaudio/best", "-o", `${__dirname}/tracks/${index[track.id].filename}`])
-         .on("progress", (progress) =>
+      youtubeDL(`https://youtu.be/${searchID}`, `${__dirname}/tracks/${index[track.id].filename}`, { filter: "audioonly" },
          {
-            index[track.id].progress = progress.percent || 0
-         })
-         .on("close", () =>
-         {
-            index[track.id].complete = true
+            progress: function(progress)
+            {
+               index[track.id].progress = progress.percent
+            },
+            complete: function()
+            {
+               index[track.id].complete = true
 
-            delItem(track.id)
+               delItem(track.id)
 
-            recursiveInfo.tracklist.shift()
-            recursiveDownloadInfo(recursiveInfo, callback)
-         })
+               recursiveInfo.tracklist.shift()
+               recursiveDownloadInfo(recursiveInfo, callback)
+            }
+         }
+      )
    }
 
    function addIndexInfo(info)
@@ -218,6 +225,35 @@ function zipFiles(path, filepaths, callback=null)
    for (let path of filepaths) archive.file(path, { name: path.split("/").at(-1) });
 
    archive.finalize();
+}
+
+function youtubeDL(url, path, opts={}, events={progress: null, complete: null})
+{
+   const video = ytdl(url, opts);
+
+   video.pipe(fs.createWriteStream(path))
+
+   video.on("response", function(res)
+   {
+      let totalSize = res.headers["content-length"];
+      let dataRead = 0;
+
+      res.on("data", function(data)
+      {
+         dataRead += data.length;
+
+         let progress = {
+            percent: (dataRead / totalSize) * 100
+         }
+
+         events?.progress?.(progress)
+      });
+
+      res.on("end", function(data)
+      {
+         events?.complete?.()
+      });
+   });
 }
 
 app.listen(PORT);
