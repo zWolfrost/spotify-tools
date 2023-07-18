@@ -2,7 +2,6 @@ const QUERY = document.getElementById("download-field")
 const BUTTON = document.getElementById("download-button")
 
 const url = window.location.href
-console.log(url)
 
 async function post(url, body)
 {
@@ -33,7 +32,7 @@ BUTTON.addEventListener("click", async () =>
    setTimeout(resetDownload, 3500)*/
 
 
-   let res = await post(url + "/", {query: query}).then(res => res.json())
+   let res = await post(url, {query: query}).then(res => res.json())
 
 
    console.log(res.id)
