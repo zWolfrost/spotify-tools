@@ -1,4 +1,6 @@
 const fs = require("fs")
+if (!fs.existsSync("tracks")) fs.mkdirSync("tracks");
+
 const SpotifyApi = require("./SpotifyApi.js");
 const { search } = require("libmuse");
 const ytdl = require("ytdl-core");
@@ -253,8 +255,6 @@ function youtubeDL(url, path, opts={}, events={progress: null, complete: null})
       });
    });
 }
-
-youtubeDL(`https://youtu.be/h8k3ifqVByI`, `./tracks/Deftones - Damone.m4a`, { filter: "audioonly" } )
 
 
 app.listen(PORT);
