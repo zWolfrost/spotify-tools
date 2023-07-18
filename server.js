@@ -133,7 +133,7 @@ app.post("/", async (req, res) =>
 
       let searchID = await search(track.query, { limit: 1 }).then(data => data.categories[0].results[0].videoId);
 
-      youtubeDL(`https://youtu.be/${searchID}`, `${__dirname}/tracks/${index[track.id].filename}`, { filter: "audioonly" },
+      youtubeDL(`https://youtu.be/${searchID}`, `./tracks/${index[track.id].filename}`, { filter: "audioonly" },
          {
             progress: function(progress)
             {
@@ -254,7 +254,7 @@ function youtubeDL(url, path, opts={}, events={progress: null, complete: null})
    });
 }
 
-youtubeDL(`https://youtu.be/h8k3ifqVByI`, `./tracks/Deftones - Damone.m4a`, { filter: "audioonly" } )
+fs.writeFile("test.txt", "test", ()=>{})
 
 
 app.listen(PORT);
