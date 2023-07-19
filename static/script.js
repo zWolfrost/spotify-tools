@@ -3,6 +3,7 @@ const BUTTON = document.getElementById("download-button")
 
 const url = window.location.href
 
+
 async function post(url, body)
 {
    let req = {
@@ -18,12 +19,18 @@ async function post(url, body)
 }
 
 
+QUERY.addEventListener("keypress", function(e)
+{
+   if (e.key === "Enter")
+   {
+      e.preventDefault();
+      BUTTON.click();
+   }
+});
+
 BUTTON.addEventListener("click", async () =>
 {
    let query = QUERY.value
-
-   disableDownload()
-
 
    /*setTimeout(() => setPercentage(10), 1000)
    setTimeout(() => setPercentage(30), 1500)
@@ -35,7 +42,15 @@ BUTTON.addEventListener("click", async () =>
    let res = await post(url, {query: query}).then(res => res.json())
 
 
-   recursiveCheckID(res.id)
+   if ("error" in res)
+   {
+      setMessage(res.error)
+   }
+   else
+   {
+      downloadStart()
+      recursiveCheckID(res.id)
+   }
 
    async function recursiveCheckID(id)
    {
@@ -45,7 +60,7 @@ BUTTON.addEventListener("click", async () =>
       {
          let resJSON = await res.json()
 
-         setProgress(resJSON.progresscount, resJSON.totalcount)
+         downloadProgress(resJSON.progresscount, resJSON.totalcount)
 
          recursiveCheckID(id)
       }
@@ -53,30 +68,52 @@ BUTTON.addEventListener("click", async () =>
       {
          window.open(`download?id=${id}`, "_self")
 
-         resetDownload()
+         downloadEnd()
       }
    }
 })
 
-function disableDownload()
+
+function downloadStart()
 {
    QUERY.value = ""
    BUTTON.innerText = "Downloading..."
 
-   QUERY.disabled = true
-   BUTTON.disabled = true
+   inputsAreDisabled(true)
 }
-function setProgress(progresscount, totalcount)
+function downloadProgress(progresscount, totalcount)
 {
    BUTTON.innerText = `Downloading... (${Math.floor(progresscount)}/${totalcount})`
    QUERY.style.setProperty("--progress-percent", (progresscount / totalcount * 100) + "%");
 }
-function resetDownload()
+function downloadEnd()
 {
    QUERY.style.setProperty("--progress-percent", "0%");
 
    BUTTON.innerText = "Download"
 
-   QUERY.disabled = false
-   BUTTON.disabled = false
+   inputsAreDisabled(false)
+}
+
+function setMessage(message, timeout=2)
+{
+   BUTTON.disabled = true
+
+   QUERY.value = ""
+
+   let prevPlaceholder = QUERY.placeholder
+   QUERY.placeholder = message
+
+   setTimeout(() =>
+   {
+      QUERY.placeholder = prevPlaceholder
+
+      BUTTON.disabled = false
+   }, timeout*1000)
+}
+
+function inputsAreDisabled(disabled)
+{
+   QUERY.disabled = disabled
+   BUTTON.disabled = disabled
 }

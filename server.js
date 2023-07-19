@@ -1,5 +1,6 @@
 const fs = require("fs")
-if (!fs.existsSync("tracks")) fs.mkdirSync("tracks");
+fs.rmSync("tracks", { recursive: true, force: true });
+fs.mkdirSync("tracks");
 
 const SpotifyApi = require("./SpotifyApi.js");
 const { search } = require("libmuse");
@@ -20,7 +21,11 @@ app.use(express.json(), express.urlencoded({ extended: true }))
 
 let index = {}
 
-//setInterval(()=>console.log(index), 1000)
+const MAX_SIMULTANEOUS_DOWNLOADS = 1
+let simultaneousDownloads = 0
+
+
+//setInterval(() => console.log(index["4JJk011GtXda1dBAyGzrqa"]?.progress), 200)
 
 
 function delItem(itemID, timeout=180)
@@ -56,16 +61,17 @@ app.get("/download", (req, res) =>
       {
          let curInfo = index[req.query.id]
 
-         if (curInfo.complete)
+         if (curInfo.progress !== begInfo.progress)
          {
-            res.download(`${__dirname}/tracks/${begInfo.filename}`, begInfo.filename)
-            clearInterval(interval)
-         }
-         else if (curInfo.progress !== begInfo.progress)
-         {
+            let percent = curInfo.progress?.percent ?? 0
             let totalcount = curInfo.trackids?.length ?? 1
 
-            res.send({progresscount: (totalcount * curInfo.progress / 100), totalcount: totalcount})
+            res.send({progresscount: (totalcount * percent / 100), totalcount: totalcount})
+            clearInterval(interval)
+         }
+         else if (curInfo.complete)
+         {
+            res.download(`${__dirname}/tracks/${begInfo.filename}`, begInfo.filename)
             clearInterval(interval)
          }
       }, UPDATEINTERVAL)
@@ -77,10 +83,24 @@ app.get("/*", (req, res) => res.status(404).sendFile(staticDIR + "404.html"))
 
 app.post("/", async (req, res) =>
 {
+   if (simultaneousDownloads + 1 > MAX_SIMULTANEOUS_DOWNLOADS)
+   {
+      res.status(502).send({ error: "Server temporarily busy" })
+      return;
+   }
+
    let query = req.body.query
 
    const token = await SpotifyApi.getSpotifyToken(process.env.CLIENT_ID, process.env.CLIENT_SECRET)
    let info = await SpotifyApi.getQueryInfo(token, query)
+
+   //console.log(info.tracklist[0].query)
+
+   if ("error" in info)
+   {
+      res.status(info.error.status).send({ error: info.error.message })
+      return;
+   }
 
    /*info = {
       id: '4JJk011GtXda1dBAyGzrqa',
@@ -112,34 +132,46 @@ app.post("/", async (req, res) =>
 
    const TRACKFORMAT = "m4a"
 
-   addIndexInfo(info)
+   addInfoToIndex(info)
+   let uniqueTracklist = Object.values( info.tracklist.reduce((track, obj) => ({ ...track, [obj.id]: obj }), {}) );
+
+   simultaneousDownloads++
 
    if (info.tracklist.length == 1)
    {
       res.send({id: info.tracklist[0].id})
 
-      recursiveDownloadInfo(structuredClone(info))
+      downloadTracklist(uniqueTracklist, () =>
+      {
+         simultaneousDownloads--
+      })
    }
    else
    {
       res.send({id: info.id})
 
-      recursiveDownloadInfo(structuredClone(info), () => zipAlbum(info))
+      downloadTracklist(uniqueTracklist, () =>
+      {
+         zipTracklist(info)
+         simultaneousDownloads--
+      })
    }
 
-   async function recursiveDownloadInfo(recursiveInfo, callback=null)
+   async function downloadTracklist(tracklist, callback=null)
    {
-      if (recursiveInfo.tracklist.length == 0) return callback?.();
+      if (tracklist.length == 0) return callback?.();
 
-      let track = recursiveInfo.tracklist[0]
+      let track = tracklist[0]
 
-      let searchID = await search(track.query, { limit: 1 }).then(data => data.categories[0].results[0].videoId);
+      let searchResult = await search(track.query, { limit: 1 })
+      let videoID = searchResult.top_result.videoId ?? searchResult.categories[0].results[0].videoId
 
-      youtubeDL(`https://youtu.be/${searchID}`, `./tracks/${index[track.id].filename}`, { filter: "audioonly" },
+
+      youtubeDL(`https://youtu.be/${videoID}`, `./tracks/${index[track.id].filename}`, { filter: "audioonly" },
          {
             progress: function(progress)
             {
-               index[track.id].progress = progress.percent
+               index[track.id].progress = progress
             },
             complete: function()
             {
@@ -147,55 +179,74 @@ app.post("/", async (req, res) =>
 
                delItem(track.id)
 
-               recursiveInfo.tracklist.shift()
-               recursiveDownloadInfo(recursiveInfo, callback)
+               tracklist.shift()
+               downloadTracklist(tracklist, callback)
             }
          }
       )
    }
 
-   function addIndexInfo(info)
+   function addInfoToIndex(info)
    {
-      if (info.tracklist.length == 1)
+      let trackids = []
+      for (let track of info.tracklist)
       {
-         index[info.tracklist[0].id] =
+         trackids.push(track.id)
+
+         index[track.id] =
          {
-            filename: `${sanitize(info.tracklist[0].content)}.${TRACKFORMAT}`,
-            progress: 0,
+            filename: `${sanitize(track.content)}.${TRACKFORMAT}`,
             complete: false
          }
       }
-      else
+
+      if (info.tracklist.length == 1) return
+
+      index[info.id] =
       {
-         let trackids = []
-         for (let track of info.tracklist)
+         filename: `${sanitize(info.content)}.zip`,
+         trackids: trackids,
+         get progress()
          {
-            trackids.push(track.id)
-
-            index[track.id] =
+            let totalProgress =
             {
-               filename: `${sanitize(track.content)}.${TRACKFORMAT}`,
-               progress: 0,
-               complete: false
+               totalBytes: 0,
+               downloadedBytes: 0,
+               percent: 0,
+
+               startTime: undefined,
+               get elapsedSeconds() { return (Date.now() - this.startTime) / 1000 },
+               get estimatedRemainingSeconds()
+               {
+                  let elapsedSeconds = this.elapsedSeconds
+                  return (elapsedSeconds / this.percent * 100) - elapsedSeconds
+               }
             }
-         }
 
-         index[info.id] =
-         {
-            filename: `${sanitize(info.content)}.zip`,
-            trackids: trackids,
-            get progress()
+            for (let id of this.trackids)
             {
-               let totalprogress = 0
-               for (let id of this.trackids) totalprogress += index[id].progress
+               totalProgress.totalBytes += index[id].progress?.totalBytes ?? 0
+               totalProgress.downloadedBytes += index[id].progress?.downloadedBytes ?? 0
 
-               return totalprogress / this.trackids.length;
-            },
-            complete: false
-         }
+               totalProgress.percent += index[id].progress?.percent ?? 0
+
+               if (index[id].progress?.startTime !== undefined)
+               {
+                  if (totalProgress.progress?.startTime === undefined || totalProgress.startTime > index[id].progress.startTime)
+                  {
+                     totalProgress.startTime = index[id].progress.startTime
+                  }
+               }
+            }
+
+            totalProgress.percent /= this.trackids.length
+
+            return totalProgress
+         },
+         complete: false
       }
    }
-   function zipAlbum(info)
+   function zipTracklist(info)
    {
       let filepaths = []
       for (let track of info.tracklist) filepaths.push(`${__dirname}/tracks/${index[track.id].filename}`)
@@ -227,33 +278,46 @@ function zipFiles(path, filepaths, callback=null)
    archive.finalize();
 }
 
-function youtubeDL(url, path, opts={}, events={progress: null, complete: null})
+function youtubeDL(url, path, opts={}, events={ response: null, progress: null, complete: null })
 {
    const video = ytdl(url, opts);
 
    video.pipe(fs.createWriteStream(path))
 
-   video.on("response", function(res)
+
+   let progress = {
+      totalBytes: undefined,
+      downloadedBytes: 0,
+      get percent() { return (this.downloadedBytes / this.totalBytes) * 100 },
+
+      startTime: undefined,
+      get elapsedSeconds() { return (Date.now() - this.startTime) / 1000 },
+      get estimatedRemainingSeconds()
+      {
+         let elapsedSeconds = this.elapsedSeconds
+         return (elapsedSeconds / this.percent * 100) - elapsedSeconds
+      }
+   }
+
+   video.once("response", function()
    {
-      let totalSize = res.headers["content-length"];
-      let dataRead = 0;
+      progress.startTime = Date.now()
 
-      res.on("data", function(data)
-      {
-         dataRead += data.length;
+      events?.response?.(progress)
+   })
 
-         let progress = {
-            percent: (dataRead / totalSize) * 100
-         }
+   video.on("progress", function(chunkLength, downloadedBytes, totalBytes)
+   {
+      progress.totalBytes = totalBytes
+      progress.downloadedBytes = downloadedBytes;
 
-         events?.progress?.(progress)
-      });
-
-      res.on("end", function(data)
-      {
-         events?.complete?.()
-      });
+      events?.progress?.(progress)
    });
+
+   video.on("end", function()
+   {
+      events?.complete?.(progress)
+   })
 }
 
 

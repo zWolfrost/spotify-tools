@@ -67,9 +67,12 @@ async function getQueryInfo(token, query, searchType="track", searchCount=1)
    if (id === undefined)
    {
       let result = await getRequest(token, `/search?q=${query}&type=${searchType}&limit=${searchCount}`)
+
+      if ("error" in result) return result
+
       result = Object.values(result)[0].items
 
-      if (result === undefined) return []
+      if (result.length == 0) return { error: { status: 400, message: "No results were found" } }
 
       type = searchType
       id = result[0].id
