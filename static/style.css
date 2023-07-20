@@ -1,6 +1,6 @@
 :root
 {
-   --spotify-color: #19e68c;
+   --spotify-color: #1ed760;
 }
 
 @font-face { font-family: Gotham-Bold; src: url("./fonts/Gotham/Gotham-Bold.otf"); }
@@ -11,6 +11,7 @@ body
 {
    font-family: Gotham-Light;
    background-color: var(--spotify-color);
+   font-size: 20px;
 }
 
 header
@@ -29,49 +30,88 @@ main
 }
 
 
+input, select
+{
+   font-family: Gotham-Light;
+
+   outline: none;
+   border: 0px;
+   border-radius: 10px;
+
+   box-shadow: inset 0 0 0 1px black;
+}
+input:hover, select:hover { box-shadow: inset 0 0 0 1.7px black; }
+input:focus, select:focus { box-shadow: inset 0 0 0 2.5px black; }
+input:disabled, select:disabled { pointer-events: none; }
+
+
+
 #download-container
 {
    padding: 50px;
 }
 
 
-#download-field
+#download-options
 {
    display: flex;
    margin: auto;
+   gap: 20px;
+   justify-content: center;
+   align-items: center
+}
 
+#download-field
+{
+   --loading-image: url(assets/spotify_icon_rotated.png);
    --progress-percent: 0%;
 
    text-align: center;
-   font-family: Gotham-Light;
-   font-size: 20px;
-
-   outline: none;
-   border: 0px;
-   border-radius: 10px;
+   font-size: 22px;
    padding: 14px;
+
    width: 100%;
-   max-width: 1000px;
+   max-width: 1250px;
 
    background:
-      linear-gradient(
-         90deg,
-         transparent var(--progress-percent),
-         white var(--progress-percent)
-      ),
-      repeating-linear-gradient(
-         135deg,
-         var(--spotify-color),
-         var(--spotify-color) 16px,
-         black 16px,
-         black 20px
-      );
-   box-shadow: inset 0 0 0 1px black;
+      linear-gradient( 90deg, transparent var(--progress-percent), white var(--progress-percent) ),
+      repeat-x var(--loading-image) 0px -125px / 150px;
+      /*repeating-linear-gradient( 135deg, var(--spotify-color), var(--spotify-color) 16px, black 16px, black 20px );*/
 }
-#download-field:hover { box-shadow: inset 0 0 0 1.7px black; }
-#download-field:focus { box-shadow: inset 0 0 0 2.5px black; }
-#download-field:disabled { pointer-events: none; }
 #download-field:disabled::placeholder { color: transparent; }
+
+
+#trim-indexes-container
+{
+   flex: 1;
+
+   width: 200px;
+   height: 40px;
+   font-size: 30px;
+
+   display: flex;
+   justify-content: space-between;
+}
+
+.trim-index
+{
+   width: 100%;
+   min-width: 90px;
+   font-size: 20px;
+   text-align: center;
+}
+.trim-index::-webkit-outer-spin-button,
+.trim-index::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+
+#empty-flex-item
+{
+   flex: 1;
+}
+
 
 #download-button
 {

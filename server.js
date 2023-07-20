@@ -21,80 +21,88 @@ app.use(express.json(), express.urlencoded({ extended: true }))
 
 let index = {}
 
-const MAX_SIMULTANEOUS_DOWNLOADS = 1
+const MAX_SIMULTANEOUS_DOWNLOADS = 15
+const MAX_TRACKLIST_LENGTH = 30
 let simultaneousDownloads = 0
 
 
-//setInterval(() => console.log(index["4JJk011GtXda1dBAyGzrqa"]?.progress), 200)
-
-
-function delItem(itemID, timeout=180)
+function safeDeleteItem(itemID, timeout=180)
 {
-   setTimeout(() =>
-   {
-      if (itemID in index)
-      {
-         let path = `./tracks/${index[itemID].filename}`
+   let wasComplete = false
 
-         fs.unlinkSync(path)
-         delete index[itemID]
+   let id = setInterval(() =>
+   {
+      if (itemID in index == false)
+      {
+         clearInterval(id)
+         return;
       }
 
-   }, timeout * 1000)
+      if (wasComplete && index[itemID].complete)
+      {
+         fs.unlinkSync(`./tracks/${index[itemID].filename}`)
+         delete index[itemID]
+
+         clearInterval(id)
+      }
+      else wasComplete = index[itemID].complete
+
+   }, (timeout/2) * 1000)
 }
 
 
 app.get("/" , (req, res) => res.sendFile(staticDIR + "home.html"))
-app.get("/download", (req, res) =>
+app.get("/update", (req, res) =>
 {
    let begInfo = structuredClone(index[req.query.id])
 
-   if (begInfo.complete)
+   const UPDATEINTERVAL = 100
+
+   let interval = setInterval(() =>
    {
-      res.download(`${__dirname}/tracks/${begInfo.filename}`, begInfo.filename)
+      let curInfo = index[req.query.id]
+
+      if (curInfo.progress !== begInfo.progress || curInfo.complete)
+      {
+         res.status(200).send({
+            percent: curInfo.progress?.percent ?? 0,
+            trackCount: curInfo.trackids?.length ?? 1,
+            complete: curInfo.complete
+         })
+
+         clearInterval(interval)
+      }
+   }, UPDATEINTERVAL)
+})
+app.get("/download", (req, res) =>
+{
+   let info = index[req.query.id]
+
+   if (info?.complete)
+   {
+      res.status(200).download(`${__dirname}/tracks/${info.filename}`, info.filename)
    }
    else
    {
-      const UPDATEINTERVAL = 100
-
-      let interval = setInterval(() =>
-      {
-         let curInfo = index[req.query.id]
-
-         if (curInfo.progress !== begInfo.progress)
-         {
-            let percent = curInfo.progress?.percent ?? 0
-            let totalcount = curInfo.trackids?.length ?? 1
-
-            res.send({progresscount: (totalcount * percent / 100), totalcount: totalcount})
-            clearInterval(interval)
-         }
-         else if (curInfo.complete)
-         {
-            res.download(`${__dirname}/tracks/${begInfo.filename}`, begInfo.filename)
-            clearInterval(interval)
-         }
-      }, UPDATEINTERVAL)
+      res.status(503).send({ error: "Service Unavailable" })
    }
 })
-app.get("/*", (req, res) => res.status(404).sendFile(staticDIR + "404.html"))
-
-
 
 app.post("/", async (req, res) =>
 {
-   if (simultaneousDownloads + 1 > MAX_SIMULTANEOUS_DOWNLOADS)
+   if (simultaneousDownloads+1 > MAX_SIMULTANEOUS_DOWNLOADS)
    {
-      res.status(502).send({ error: "Server temporarily busy" })
+      res.status(429).send({ error: "Too Many Requests" })
       return;
    }
 
-   let query = req.body.query
 
-   const token = await SpotifyApi.getSpotifyToken(process.env.CLIENT_ID, process.env.CLIENT_SECRET)
-   let info = await SpotifyApi.getQueryInfo(token, query)
+   const QUERY = req.body.query
+   const TRIM_INDEXES = req.body.trim ?? []
 
-   //console.log(info.tracklist[0].query)
+   const TOKEN = await SpotifyApi.getSpotifyToken(process.env.CLIENT_ID, process.env.CLIENT_SECRET)
+   let info = await SpotifyApi.getQueryInfo(TOKEN, QUERY)
+
 
    if ("error" in info)
    {
@@ -102,44 +110,38 @@ app.post("/", async (req, res) =>
       return;
    }
 
-   /*info = {
-      id: '4JJk011GtXda1dBAyGzrqa',
-      type: 'playlist',
-      tracklist: [
-         {
-            name: 'One Step Closer',
-            album: 'Hybrid Theory',
-            authors: ["Linkin Park"],
-            query: 'One Step Closer Hybrid Theory Linkin Park',
-            content: 'One Step Closer - Linkin Park (Hybrid Theory)',
-            id: '4bYLTrlcqctyHck3fjhMgW',
-            explicit: false,
-            url: 'https://open.spotify.com/track/4bYLTrlcqctyHck3fjhMgW'
-         },
-         {
-            name: 'Digital Bath',
-            album: 'White Pony',
-            authors: ["Deftones"],
-            query: 'Digital Bath White Pony Deftones',
-            content: 'Digital Bath - Deftones (White Pony)',
-            id: '2jSJm3Gv6GLxduWLenmjKS',
-            explicit: false,
-            url: 'https://open.spotify.com/track/2jSJm3Gv6GLxduWLenmjKS'
-         }
-      ],
-      content: 'The Uncharted - zWolfrost'
-   }*/
+   let uniqueTracklist;
+   try
+   {
+      info.tracklist = info.tracklist.slice((TRIM_INDEXES[0] ?? undefined) -1, TRIM_INDEXES[1] ?? undefined)
+      info.content += ` [${TRIM_INDEXES.join(",")}]`
+      uniqueTracklist = Object.values( info.tracklist.reduce((track, obj) => ({ ...track, [obj.id]: obj }), {}) );
+   }
+   catch
+   {
+      res.status(400).send({ error: "Invalid trim information" })
+      return;
+   }
 
-   const TRACKFORMAT = "m4a"
+   if (info.tracklist.length == 0 || uniqueTracklist.length == 0)
+   {
+      res.status(400).send({ error: "Tracklist contains no tracks" })
+      return;
+   }
+   if (uniqueTracklist.length > MAX_TRACKLIST_LENGTH)
+   {
+      res.status(400).send({ error: `Tracklist contains too many tracks (max is "${MAX_TRACKLIST_LENGTH}")` })
+      return;
+   }
 
    addInfoToIndex(info)
-   let uniqueTracklist = Object.values( info.tracklist.reduce((track, obj) => ({ ...track, [obj.id]: obj }), {}) );
+
 
    simultaneousDownloads++
 
-   if (info.tracklist.length == 1)
+   if (uniqueTracklist.length == 1)
    {
-      res.send({id: info.tracklist[0].id})
+      res.status(202).send({id: uniqueTracklist[0].id})
 
       downloadTracklist(uniqueTracklist, () =>
       {
@@ -148,7 +150,7 @@ app.post("/", async (req, res) =>
    }
    else
    {
-      res.send({id: info.id})
+      res.status(202).send({id: info.id})
 
       downloadTracklist(uniqueTracklist, () =>
       {
@@ -157,36 +159,8 @@ app.post("/", async (req, res) =>
       })
    }
 
-   async function downloadTracklist(tracklist, callback=null)
-   {
-      if (tracklist.length == 0) return callback?.();
 
-      let track = tracklist[0]
-
-      let searchResult = await search(track.query, { limit: 1 })
-      let videoID = searchResult.top_result.videoId ?? searchResult.categories[0].results[0].videoId
-
-
-      youtubeDL(`https://youtu.be/${videoID}`, `./tracks/${index[track.id].filename}`, { filter: "audioonly" },
-         {
-            progress: function(progress)
-            {
-               index[track.id].progress = progress
-            },
-            complete: function()
-            {
-               index[track.id].complete = true
-
-               delItem(track.id)
-
-               tracklist.shift()
-               downloadTracklist(tracklist, callback)
-            }
-         }
-      )
-   }
-
-   function addInfoToIndex(info)
+   function addInfoToIndex(info, formats={audio: "mp3", archive: "zip"})
    {
       let trackids = []
       for (let track of info.tracklist)
@@ -195,7 +169,7 @@ app.post("/", async (req, res) =>
 
          index[track.id] =
          {
-            filename: `${sanitize(track.content)}.${TRACKFORMAT}`,
+            filename: `${sanitize(track.content)}.${formats.audio}`,
             complete: false
          }
       }
@@ -204,7 +178,7 @@ app.post("/", async (req, res) =>
 
       index[info.id] =
       {
-         filename: `${sanitize(info.content)}.zip`,
+         filename: `${sanitize(info.content)}.${formats.archive}`,
          trackids: trackids,
          get progress()
          {
@@ -246,19 +220,53 @@ app.post("/", async (req, res) =>
          complete: false
       }
    }
+
+   async function downloadTracklist(tracklist, callback=null)
+   {
+      if (tracklist.length == 0) return callback?.();
+
+      let track = tracklist[0]
+
+      let searchResult = await search(track.query, { limit: 1 })
+      let videoID = searchResult.top_result.videoId ?? searchResult.categories[0].results[0].videoId
+
+
+      youtubeDL(`https://youtu.be/${videoID}`, `./tracks/${index[track.id].filename}`, { filter: "audioonly" },
+         {
+            progress: function(progress)
+            {
+               index[track.id].progress = progress
+            },
+            complete: function()
+            {
+               index[track.id].complete = true
+
+               safeDeleteItem(track.id)
+
+               tracklist.shift()
+               downloadTracklist(tracklist, callback)
+            }
+         }
+      )
+   }
+
    function zipTracklist(info)
    {
       let filepaths = []
-      for (let track of info.tracklist) filepaths.push(`${__dirname}/tracks/${index[track.id].filename}`)
+      for (let track of info.tracklist)
+      {
+         filepaths.push(`${__dirname}/tracks/${index[track.id].filename}`)
+      }
 
-      zipFiles(`./tracks/${sanitize(info.content)}.zip`, filepaths, () =>
+      zipFiles(`./tracks/${index[info.id].filename}`, filepaths, () =>
       {
          index[info.id].complete = true
 
-         delItem(info.id)
+         safeDeleteItem(info.id)
       })
    }
 })
+
 
 function zipFiles(path, filepaths, callback=null)
 {
@@ -321,4 +329,8 @@ function youtubeDL(url, path, opts={}, events={ response: null, progress: null, 
 }
 
 
+app.get("/*", (req, res) => res.status(404).sendFile(staticDIR + "404.html"))
 app.listen(PORT);
+
+
+//setInterval(() => { console.clear(); console.log(index) }, 100)

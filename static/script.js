@@ -1,5 +1,8 @@
 const QUERY = document.getElementById("download-field")
 const BUTTON = document.getElementById("download-button")
+const TRIMBEG = document.getElementById("trim-beg-index")
+const TRIMEND = document.getElementById("trim-end-index")
+
 
 const url = window.location.href
 
@@ -31,47 +34,45 @@ QUERY.addEventListener("keypress", function(e)
 BUTTON.addEventListener("click", async () =>
 {
    let query = QUERY.value
+   let trimbeg = TRIMBEG.value == "" ? undefined : TRIMBEG.value
+   let trimend = TRIMEND.value == "" ? undefined : TRIMEND.value
 
-   /*setTimeout(() => setPercentage(10), 1000)
-   setTimeout(() => setPercentage(30), 1500)
-   setTimeout(() => setPercentage(70), 2100)
-   setTimeout(() => setPercentage(100), 3000)
-   setTimeout(resetDownload, 3500)*/
+   downloadStart()
 
 
-   let res = await post(url, {query: query}).then(res => res.json())
+   let res = await post(url, { query: query, trim: [trimbeg, trimend] }).then(res => res.json())
 
 
    if ("error" in res)
    {
+      downloadEnd()
       setMessage(res.error)
    }
    else
    {
-      downloadStart()
       recursiveCheckID(res.id)
    }
 
    async function recursiveCheckID(id)
    {
-      let res = await fetch(`download?id=${id}`)
+      let res = await fetch(`update?id=${id}`).then(res => res.json())
 
-      try
-      {
-         let resJSON = await res.json()
+      downloadProgress(res.percent, res.trackCount)
 
-         downloadProgress(resJSON.progresscount, resJSON.totalcount)
-
-         recursiveCheckID(id)
-      }
-      catch
+      if (res.complete)
       {
          window.open(`download?id=${id}`, "_self")
-
          downloadEnd()
+      }
+      else
+      {
+         recursiveCheckID(id)
       }
    }
 })
+
+
+//downloadStart();let p=0,i=setInterval(()=>{downloadProgress(++p);if(p==100){clearInterval(i);downloadEnd()}}, 20 )
 
 
 function downloadStart()
@@ -81,10 +82,10 @@ function downloadStart()
 
    inputsAreDisabled(true)
 }
-function downloadProgress(progresscount, totalcount)
+function downloadProgress(percent, totalCount=1)
 {
-   BUTTON.innerText = `Downloading... (${Math.floor(progresscount)}/${totalcount})`
-   QUERY.style.setProperty("--progress-percent", (progresscount / totalcount * 100) + "%");
+   BUTTON.innerText = `Downloading... (${Math.floor(totalCount*percent/100)}/${totalCount})`
+   QUERY.style.setProperty("--progress-percent", percent + "%");
 }
 function downloadEnd()
 {

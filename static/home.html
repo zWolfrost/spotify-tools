@@ -13,15 +13,30 @@
 
       <main>
          <div id="download-container">
-            <input id="download-field" type="text" maxlength="100" placeholder="Enter a track name or any spotify link of a playlist, artist, album..."/>
+            <div id="download-options">
+
+               <div id="empty-flex-item">
+               </div>
+
+               <input id="download-field" type="text" maxlength="100" autocomplete="off" placeholder="Enter a track name or any spotify link of a playlist, artist, album..."/>
+
+               <div id="trim-indexes-container">
+                  <input type="number" id="trim-beg-index" class="trim-index" placeholder="1">
+                  <span>:</span>
+                  <input type="number" id="trim-end-index" class="trim-index" placeholder="END">
+               </div>
+            </div>
+
             <button id="download-button">Download</button>
          </div>
 
          <p>
-            This script WILL TRY HIS BEST to match the spotify songs you've given on youtube music. It's pretty accurate though, so don't worry about that.
+            This script <b>WILL TRY HIS BEST</b> to match the spotify songs you've given on youtube music.<br>
+            It's pretty accurate though, so don't worry about that.
          </p>
          <p>
-            If this doesn't work for some reason, tell me on <a href="https://github.com/zWolfrost/spotify-dlp-js">github</a>, because i probably have to code in time limits...
+            Also, of course, if you want the full playlist, leave the trimming options at the left blank.<br>
+            Mind you, there is a max number of tracks you can download in one time.
          </p>
       </main>
    </body>
