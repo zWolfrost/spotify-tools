@@ -34,8 +34,8 @@ QUERY.addEventListener("keypress", function(e)
 BUTTON.addEventListener("click", async () =>
 {
    let query = QUERY.value
-   let trimbeg = TRIMBEG.value == "" ? undefined : TRIMBEG.value
-   let trimend = TRIMEND.value == "" ? undefined : TRIMEND.value
+   let trimbeg = TRIMBEG.value
+   let trimend = TRIMEND.value
 
    downloadStart()
 

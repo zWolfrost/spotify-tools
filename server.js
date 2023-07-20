@@ -98,7 +98,7 @@ app.post("/", async (req, res) =>
 
 
    const QUERY = req.body.query
-   const TRIM_INDEXES = req.body.trim ?? []
+   const TRIM_INDEXES = req.body.trim
 
    const TOKEN = await SpotifyApi.getSpotifyToken(process.env.CLIENT_ID, process.env.CLIENT_SECRET)
    let info = await SpotifyApi.getQueryInfo(TOKEN, QUERY)
@@ -110,11 +110,13 @@ app.post("/", async (req, res) =>
       return;
    }
 
+
    let uniqueTracklist;
    try
    {
-      info.tracklist = info.tracklist.slice((TRIM_INDEXES[0] ?? undefined) -1, TRIM_INDEXES[1] ?? undefined)
-      info.content += ` [${TRIM_INDEXES.join(",")}]`
+      let cleanIndex = (i, add=0) => isNaN(+(i ?? undefined)) ? undefined : +i+add
+
+      info.tracklist = info.tracklist.slice(cleanIndex(TRIM_INDEXES[0], -1), cleanIndex(TRIM_INDEXES[1]))
       uniqueTracklist = Object.values( info.tracklist.reduce((track, obj) => ({ ...track, [obj.id]: obj }), {}) );
    }
    catch
@@ -135,6 +137,7 @@ app.post("/", async (req, res) =>
    }
 
    addInfoToIndex(info)
+
 
 
    simultaneousDownloads++
