@@ -1,3 +1,5 @@
+require("dotenv").config()
+
 const fs = require("fs")
 fs.rmSync("tracks", { recursive: true, force: true });
 fs.mkdirSync("tracks");
@@ -6,8 +8,6 @@ const SpotifyApi = require("./SpotifyApi.js");
 const { search } = require("libmuse");
 const ytdl = require("ytdl-core");
 const sanitize = require("sanitize-filename");
-
-if (process.env.NODE_ENV !== "production") require("dotenv").config()
 
 const PORT = 3000
 const express = require("express");
@@ -19,13 +19,20 @@ app.use(express.static(staticDIR))
 app.use(express.json(), express.urlencoded({ extended: true }))
 
 
-let index = {}
-
+const UPDATE_INTERVAL_SECONDS = 0.5
 const MAX_SIMULTANEOUS_DOWNLOADS = 15
 const MAX_TRACKLIST_LENGTH = 30
+
+let index = {}, token = {}
 let simultaneousDownloads = 0
 
 
+async function getSpotifyToken()
+{
+   let spotifyToken = await SpotifyApi.getSpotifyToken(process.env.CLIENT_ID, process.env.CLIENT_SECRET)
+   spotifyToken.expiring_date = Date.now() + (spotifyToken.expires_in * 1000)
+   return spotifyToken
+}
 function safeDeleteItem(itemID, timeout=180)
 {
    let wasComplete = false
@@ -56,8 +63,6 @@ app.get("/update", (req, res) =>
 {
    let begInfo = structuredClone(index[req.query.id])
 
-   const UPDATEINTERVAL = 100
-
    let interval = setInterval(() =>
    {
       let curInfo = index[req.query.id]
@@ -66,13 +71,14 @@ app.get("/update", (req, res) =>
       {
          res.status(200).send({
             percent: curInfo.progress?.percent ?? 0,
+            remainingSeconds: curInfo.progress?.estimatedRemainingSeconds,
             trackCount: curInfo.trackids?.length ?? 1,
-            complete: curInfo.complete
+            complete: curInfo.complete,
          })
 
          clearInterval(interval)
       }
-   }, UPDATEINTERVAL)
+   }, UPDATE_INTERVAL_SECONDS * 1000)
 })
 app.get("/download", (req, res) =>
 {
@@ -98,10 +104,14 @@ app.post("/", async (req, res) =>
 
 
    const QUERY = req.body.query
-   const TRIM_INDEXES = req.body.trim
+   const TRIM_INDEXES = req.body.trim.map(n => parseInt(n) || undefined)
 
-   const TOKEN = await SpotifyApi.getSpotifyToken(process.env.CLIENT_ID, process.env.CLIENT_SECRET)
-   let info = await SpotifyApi.getQueryInfo(TOKEN, QUERY)
+   if (token.expiring_date == undefined || Date.now() >= token.expiring_date)
+   {
+      token = await getSpotifyToken()
+   }
+
+   let info = await SpotifyApi.getQueryInfo(token.access_token, QUERY)
 
 
    if ("error" in info)
@@ -114,9 +124,7 @@ app.post("/", async (req, res) =>
    let uniqueTracklist;
    try
    {
-      let cleanIndex = (i, add=0) => isNaN(+(i ?? undefined)) ? undefined : +i+add
-
-      info.tracklist = info.tracklist.slice(cleanIndex(TRIM_INDEXES[0], -1), cleanIndex(TRIM_INDEXES[1]))
+      info.tracklist = info.tracklist.slice(...TRIM_INDEXES)
       uniqueTracklist = Object.values( info.tracklist.reduce((track, obj) => ({ ...track, [obj.id]: obj }), {}) );
    }
    catch
@@ -182,6 +190,7 @@ app.post("/", async (req, res) =>
       index[info.id] =
       {
          filename: `${sanitize(info.content)}.${formats.archive}`,
+         complete: false,
          trackids: trackids,
          get progress()
          {
@@ -192,12 +201,8 @@ app.post("/", async (req, res) =>
                percent: 0,
 
                startTime: undefined,
-               get elapsedSeconds() { return (Date.now() - this.startTime) / 1000 },
-               get estimatedRemainingSeconds()
-               {
-                  let elapsedSeconds = this.elapsedSeconds
-                  return (elapsedSeconds / this.percent * 100) - elapsedSeconds
-               }
+               elapsedSeconds: 0,
+               estimatedRemainingSeconds: undefined
             }
 
             for (let id of this.trackids)
@@ -209,7 +214,7 @@ app.post("/", async (req, res) =>
 
                if (index[id].progress?.startTime !== undefined)
                {
-                  if (totalProgress.progress?.startTime === undefined || totalProgress.startTime > index[id].progress.startTime)
+                  if (totalProgress.startTime === undefined || totalProgress.startTime > index[id].progress.startTime)
                   {
                      totalProgress.startTime = index[id].progress.startTime
                   }
@@ -218,20 +223,27 @@ app.post("/", async (req, res) =>
 
             totalProgress.percent /= this.trackids.length
 
+            totalProgress.elapsedSeconds = (Date.now() - totalProgress.startTime) / 1000
+            totalProgress.estimatedRemainingSeconds =  Math.max((totalProgress.elapsedSeconds / totalProgress.percent * 100) - totalProgress.elapsedSeconds, 0)
+
             return totalProgress
-         },
-         complete: false
+         }
       }
+   }
+
+   async function searchVideoIdFromQuery(query, limit=1)
+   {
+      let searchResult = await search(query, { limit: limit })
+      return searchResult.top_result.videoId ?? searchResult.categories[0].results[0].videoId
    }
 
    async function downloadTracklist(tracklist, callback=null)
    {
       if (tracklist.length == 0) return callback?.();
 
-      let track = tracklist[0]
+      let track = tracklist.shift()
 
-      let searchResult = await search(track.query, { limit: 1 })
-      let videoID = searchResult.top_result.videoId ?? searchResult.categories[0].results[0].videoId
+      let videoID = await searchVideoIdFromQuery(track.query)
 
 
       youtubeDL(`https://youtu.be/${videoID}`, `./tracks/${index[track.id].filename}`, { filter: "audioonly" },
@@ -246,7 +258,6 @@ app.post("/", async (req, res) =>
 
                safeDeleteItem(track.id)
 
-               tracklist.shift()
                downloadTracklist(tracklist, callback)
             }
          }
@@ -306,7 +317,8 @@ function youtubeDL(url, path, opts={}, events={ response: null, progress: null, 
       get estimatedRemainingSeconds()
       {
          let elapsedSeconds = this.elapsedSeconds
-         return (elapsedSeconds / this.percent * 100) - elapsedSeconds
+         let remainingSeconds = (elapsedSeconds / this.percent * 100) - elapsedSeconds
+         return Math.max(remainingSeconds, 0)
       }
    }
 
@@ -336,4 +348,4 @@ app.get("/*", (req, res) => res.status(404).sendFile(staticDIR + "404.html"))
 app.listen(PORT);
 
 
-//setInterval(() => { console.clear(); console.log(index) }, 100)
+//setInterval(() => { console.clear(); console.log(token, Date.now()) }, 100)

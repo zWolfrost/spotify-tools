@@ -14,7 +14,7 @@ async function getSpotifyToken(client_id, client_secret)
       body: `grant_type=client_credentials&client_id=${client_id}&client_secret=${client_secret}`
    }
 
-   return fetch("https://accounts.spotify.com/api/token", request).then(res => res.json()).then(res => res.access_token)
+   return fetch("https://accounts.spotify.com/api/token", request).then(res => res.json())
 }
 
 async function getRequest(token, uri)
@@ -146,12 +146,15 @@ async function getQueryInfo(token, query, searchType="track", searchCount=1)
    return info
 }
 
-/*async function a()
+/*
+async function a()
 {
    const token = await getSpotifyToken("0e10f546730a413eb13a28a6ffeaece4", "85c7a868f92849c6a9370c1406b665c8")
    let info = await getQueryInfo(token, "https://open.spotify.com/album/3DuiGV3J09SUhvp8gqNx8h?si=ReSEd1WYRge0g1P-7WgXuw")
    console.log(info)
-}*/
+}
+a()
+*/
 
 /*
 https://open.spotify.com/album/09wqWIOKWuS6RwjBrXe08B?si=3266fb2161824070

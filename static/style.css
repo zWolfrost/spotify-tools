@@ -81,29 +81,19 @@ input:disabled, select:disabled { pointer-events: none; }
 #download-field:disabled::placeholder { color: transparent; }
 
 
-#trim-indexes-container
+#trim-indexes
 {
    flex: 1;
 
-   width: 200px;
+   min-width: 200px;
    height: 40px;
-   font-size: 30px;
+   font-size: 20px;
+   text-align: center;
 
    display: flex;
    justify-content: space-between;
-}
 
-.trim-index
-{
-   width: 100%;
-   min-width: 90px;
-   font-size: 20px;
-   text-align: center;
-}
-.trim-index::-webkit-outer-spin-button,
-.trim-index::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+   background: white
 }
 
 

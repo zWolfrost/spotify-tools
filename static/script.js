@@ -1,7 +1,6 @@
-const QUERY = document.getElementById("download-field")
-const BUTTON = document.getElementById("download-button")
-const TRIMBEG = document.getElementById("trim-beg-index")
-const TRIMEND = document.getElementById("trim-end-index")
+const DL_QUERY = document.getElementById("download-field")
+const DL_BUTTON = document.getElementById("download-button")
+const TRIM_INDEXES = document.getElementById("trim-indexes")
 
 
 const url = window.location.href
@@ -22,25 +21,24 @@ async function post(url, body)
 }
 
 
-QUERY.addEventListener("keypress", function(e)
+DL_QUERY.addEventListener("keypress", function(e)
 {
    if (e.key === "Enter")
    {
       e.preventDefault();
-      BUTTON.click();
+      DL_BUTTON.click();
    }
 });
 
-BUTTON.addEventListener("click", async () =>
+DL_BUTTON.addEventListener("click", async () =>
 {
-   let query = QUERY.value
-   let trimbeg = TRIMBEG.value
-   let trimend = TRIMEND.value
+   let query = DL_QUERY.value
+   let trim_indexes = TRIM_INDEXES.value.split(":").filter(n => n !== "")
 
    downloadStart()
 
 
-   let res = await post(url, { query: query, trim: [trimbeg, trimend] }).then(res => res.json())
+   let res = await post(url, { query: query, trim: trim_indexes }).then(res => res.json())
 
 
    if ("error" in res)
@@ -57,7 +55,7 @@ BUTTON.addEventListener("click", async () =>
    {
       let res = await fetch(`update?id=${id}`).then(res => res.json())
 
-      downloadProgress(res.percent, res.trackCount)
+      downloadProgress(res.percent, res.remainingSeconds, res.trackCount)
 
       if (res.complete)
       {
@@ -77,44 +75,48 @@ BUTTON.addEventListener("click", async () =>
 
 function downloadStart()
 {
-   QUERY.value = ""
-   BUTTON.innerText = "Downloading..."
+   DL_QUERY.value = ""
+   TRIM_INDEXES.value = ""
+   DL_BUTTON.innerText = "Downloading..."
 
    inputsAreDisabled(true)
 }
-function downloadProgress(percent, totalCount=1)
+function downloadProgress(percent, remainingSeconds, totalCount=1)
 {
-   BUTTON.innerText = `Downloading... (${Math.floor(totalCount*percent/100)}/${totalCount})`
-   QUERY.style.setProperty("--progress-percent", percent + "%");
+   DL_QUERY.style.setProperty("--progress-percent", percent + "%");
+   TRIM_INDEXES.value = remainingSeconds === null ? "" : `${remainingSeconds?.toFixed(2)}s`
+   DL_BUTTON.innerText = `Downloading... (${Math.floor(totalCount*percent/100)}/${totalCount})`
 }
 function downloadEnd()
 {
-   QUERY.style.setProperty("--progress-percent", "0%");
+   DL_QUERY.style.setProperty("--progress-percent", "0%");
 
-   BUTTON.innerText = "Download"
+   TRIM_INDEXES.value = ""
+   DL_BUTTON.innerText = "Download"
 
    inputsAreDisabled(false)
 }
 
 function setMessage(message, timeout=2)
 {
-   BUTTON.disabled = true
+   DL_BUTTON.disabled = true
 
-   QUERY.value = ""
+   DL_QUERY.value = ""
 
-   let prevPlaceholder = QUERY.placeholder
-   QUERY.placeholder = message
+   let prevPlaceholder = DL_QUERY.placeholder
+   DL_QUERY.placeholder = message
 
    setTimeout(() =>
    {
-      QUERY.placeholder = prevPlaceholder
+      DL_QUERY.placeholder = prevPlaceholder
 
-      BUTTON.disabled = false
+      DL_BUTTON.disabled = false
    }, timeout*1000)
 }
 
 function inputsAreDisabled(disabled)
 {
-   QUERY.disabled = disabled
-   BUTTON.disabled = disabled
+   DL_QUERY.disabled = disabled
+   TRIM_INDEXES.disabled = disabled
+   DL_BUTTON.disabled = disabled
 }
