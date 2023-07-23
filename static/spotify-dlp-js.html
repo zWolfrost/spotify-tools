@@ -2,10 +2,16 @@
    <head>
       <title>spotify-dlp-js</title>
       <link rel="stylesheet" href="style.css">
-      <script defer src="script.js"></script>
+      <script defer src="spotify-dlp-js.js"></script>
    </head>
 
    <body>
+      <nav>
+         <a href="/">spotify-dlp-js</a
+         ><div class="vr"></div
+         ><a href="/m4a-to-mp3">m4a-to-mp3</a>
+      </nav>
+
       <header>
          <h1>spotify-dlp-js</h1>
          <h5>ZERO bloat! only PURE functionality!</h5>
@@ -15,12 +21,16 @@
          <div id="download-container">
             <div id="download-options">
 
-               <div id="empty-flex-item">
-               </div>
+               <!--<select id="audio-format">
+                  <option value="m4a" selected>.m4a</option>
+                  <option value="mp3">.mp3</option>
+               </select>-->
+               <div style="flex:1"></div>
 
                <input id="download-field" type="text" maxlength="100" autocomplete="off" placeholder="Enter a track name or any spotify link of a playlist, artist, album..."/>
 
                <input id="trim-indexes" class="trim-index" type="text" placeholder="<START>:<END>">
+
             </div>
 
             <button id="download-button">Download</button>
@@ -31,7 +41,7 @@
             It's pretty accurate though, so don't worry about that.
          </p>
          <p>
-            Also, of course, if you want the full playlist, leave the slicing options at the right blank.<br>
+            Also, of course, if you want the full playlist, leave the slicing options blank.<br>
             If you do want to slice it though, remember that the slicing options are 0-based<br>
             So, for example: if you want from the 4th to the 6th song in a playlist, you should type in "3:6"<br>
          </p>

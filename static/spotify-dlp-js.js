@@ -38,7 +38,7 @@ DL_BUTTON.addEventListener("click", async () =>
    downloadStart()
 
 
-   let res = await post(url, { query: query, trim: trim_indexes }).then(res => res.json())
+   let res = await post(url, { query: query, trim: trim_indexes, }).then(res => res.json())
 
 
    if ("error" in res)

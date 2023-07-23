@@ -19,8 +19,8 @@ app.use(express.static(staticDIR))
 app.use(express.json(), express.urlencoded({ extended: true }))
 
 
-const UPDATE_INTERVAL_SECONDS = 0.5
-const MAX_SIMULTANEOUS_DOWNLOADS = 15
+const UPDATE_INTERVAL_SECONDS = 0.4
+const MAX_SIMULTANEOUS_DOWNLOADS = 10
 const MAX_TRACKLIST_LENGTH = 30
 
 let index = {}, token = {}
@@ -58,7 +58,8 @@ function safeDeleteItem(itemID, timeout=180)
 }
 
 
-app.get("/" , (req, res) => res.sendFile(staticDIR + "home.html"))
+app.get("/" , (req, res) => res.sendFile(staticDIR + "spotify-dlp-js.html"))
+app.get("/m4a-to-mp3" , (req, res) => res.sendFile(staticDIR + "m4a-to-mp3.html"))
 app.get("/update", (req, res) =>
 {
    let begInfo = structuredClone(index[req.query.id])
@@ -104,7 +105,8 @@ app.post("/", async (req, res) =>
 
 
    const QUERY = req.body.query
-   const TRIM_INDEXES = req.body.trim.map(n => parseInt(n) || undefined)
+   const TRIM_INDEXES = req.body.trim?.map(n => parseInt(n) || undefined) || [undefined, undefined]
+
 
    if (token.expiring_date == undefined || Date.now() >= token.expiring_date)
    {
@@ -146,32 +148,20 @@ app.post("/", async (req, res) =>
 
    addInfoToIndex(info)
 
+   res.status(202).send({id: info.id})
 
 
    simultaneousDownloads++
 
-   if (uniqueTracklist.length == 1)
-   {
-      res.status(202).send({id: uniqueTracklist[0].id})
+   await downloadTracklist(uniqueTracklist)
+   if (uniqueTracklist.length !== 1) await zipTracklist(info)
 
-      downloadTracklist(uniqueTracklist, () =>
-      {
-         simultaneousDownloads--
-      })
-   }
-   else
-   {
-      res.status(202).send({id: info.id})
+   console.log(uniqueTracklist.map(track => track.content))
 
-      downloadTracklist(uniqueTracklist, () =>
-      {
-         zipTracklist(info)
-         simultaneousDownloads--
-      })
-   }
+   simultaneousDownloads--
 
 
-   function addInfoToIndex(info, formats={audio: "mp3", archive: "zip"})
+   function addInfoToIndex(info, formats={audio: "m4a", archive: "zip"})
    {
       let trackids = []
       for (let track of info.tracklist)
@@ -237,67 +227,78 @@ app.post("/", async (req, res) =>
       return searchResult.top_result.videoId ?? searchResult.categories[0].results[0].videoId
    }
 
-   async function downloadTracklist(tracklist, callback=null)
+   function downloadTracklist(tracklist)
    {
-      if (tracklist.length == 0) return callback?.();
+      tracklist = structuredClone(tracklist)
 
-      let track = tracklist.shift()
+      return new Promise(async resolve =>
+      {
+         let track = tracklist.shift()
 
-      let videoID = await searchVideoIdFromQuery(track.query)
+         let videoID = await searchVideoIdFromQuery(track.query)
 
 
-      youtubeDL(`https://youtu.be/${videoID}`, `./tracks/${index[track.id].filename}`, { filter: "audioonly" },
-         {
-            progress: function(progress)
+         youtubeDL(`https://youtu.be/${videoID}`, `./tracks/${index[track.id].filename}`, { filter: "audioonly" },
             {
-               index[track.id].progress = progress
-            },
-            complete: function()
-            {
-               index[track.id].complete = true
+               progress: function(progress)
+               {
+                  index[track.id].progress = progress
+               },
+               complete: function()
+               {
+                  index[track.id].complete = true
 
-               safeDeleteItem(track.id)
+                  safeDeleteItem(track.id)
 
-               downloadTracklist(tracklist, callback)
+                  if (tracklist.length == 0) resolve("done")
+                  else resolve(downloadTracklist(tracklist))
+               }
             }
-         }
-      )
+         )
+      })
    }
 
    function zipTracklist(info)
    {
-      let filepaths = []
-      for (let track of info.tracklist)
+      return new Promise(async resolve =>
       {
-         filepaths.push(`${__dirname}/tracks/${index[track.id].filename}`)
-      }
+         let filepaths = []
+         for (let track of info.tracklist)
+         {
+            filepaths.push(`${__dirname}/tracks/${index[track.id].filename}`)
+         }
 
-      zipFiles(`./tracks/${index[info.id].filename}`, filepaths, () =>
-      {
+         await zipFiles(`./tracks/${index[info.id].filename}`, filepaths)
+
          index[info.id].complete = true
 
          safeDeleteItem(info.id)
+
+         resolve()
       })
    }
 })
 
 
-function zipFiles(path, filepaths, callback=null)
+function zipFiles(path, filepaths)
 {
-   let fs = require("fs");
-   let archiver = require("archiver");
+   return new Promise(resolve =>
+   {
+      let fs = require("fs");
+      let archiver = require("archiver");
 
-   let output = fs.createWriteStream(path);
-   let archive = archiver("zip", { gzip: true, zlib: { level: 9 } });
+      let output = fs.createWriteStream(path);
+      let archive = archiver("zip", { gzip: true, zlib: { level: 9 } });
 
-   //archive.on("error", (err) => {throw err} );
-   archive.on("end", () => callback?.());
+      //archive.on("error", (err) => {throw err} );
+      archive.on("end", resolve);
 
-   archive.pipe(output);
+      archive.pipe(output);
 
-   for (let path of filepaths) archive.file(path, { name: path.split("/").at(-1) });
+      for (let path of filepaths) archive.file(path, { name: path.split("/").at(-1) });
 
-   archive.finalize();
+      archive.finalize();
+   })
 }
 
 function youtubeDL(url, path, opts={}, events={ response: null, progress: null, complete: null })
@@ -348,4 +349,5 @@ app.get("/*", (req, res) => res.status(404).sendFile(staticDIR + "404.html"))
 app.listen(PORT);
 
 
+//console.clear()
 //setInterval(() => { console.clear(); console.log(token, Date.now()) }, 100)
