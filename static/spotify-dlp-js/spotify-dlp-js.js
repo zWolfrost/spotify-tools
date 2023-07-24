@@ -6,21 +6,6 @@ const TRIM_INDEXES = document.getElementById("trim-indexes")
 const url = window.location.href
 
 
-async function post(url, body)
-{
-   let req = {
-      method: "POST",
-      headers: {
-         "Content-Type": "application/json",
-         "Accept": "application/json"
-      },
-      body: JSON.stringify(body)
-   }
-
-   return fetch(url, req)
-}
-
-
 DL_QUERY.addEventListener("keypress", function(e)
 {
    if (e.key === "Enter")
@@ -38,7 +23,17 @@ DL_BUTTON.addEventListener("click", async () =>
    downloadStart()
 
 
-   let res = await post(url, { query: query, trim: trim_indexes, }).then(res => res.json())
+   let res = await fetch(url, {
+      method: "POST",
+      headers: {
+         "Content-Type": "application/json",
+         "Accept": "application/json"
+      },
+      body: JSON.stringify({
+         query: query,
+         trim: trim_indexes
+      })
+   }).then(res => res.json())
 
 
    if ("error" in res)

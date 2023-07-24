@@ -154,3 +154,8 @@ button, #upload-button
 button:hover, #upload-button:hover { background-color: #eeeeee; transform: scale(1.04); }
 button:active, #upload-button:active { background-color: #dddddd; transform: scale(1); }
 button:disabled, #upload-button:disabled { pointer-events: none; }
+
+#upload-button.filehover
+{
+   outline: 2px dashed black;
+}
