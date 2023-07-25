@@ -23,7 +23,7 @@ DL_BUTTON.addEventListener("click", async () =>
    downloadStart()
 
 
-   let res = await fetch(url, {
+   let info = await fetch(url, {
       method: "POST",
       headers: {
          "Content-Type": "application/json",
@@ -36,14 +36,15 @@ DL_BUTTON.addEventListener("click", async () =>
    }).then(res => res.json())
 
 
-   if ("error" in res)
+   if ("error" in info)
    {
       downloadEnd()
-      setMessage(res.error)
+      setMessage(info.error)
    }
    else
    {
-      recursiveCheckID(res.id)
+      displayInfo(info)
+      recursiveCheckID(info.id)
    }
 
    async function recursiveCheckID(id)
@@ -55,6 +56,7 @@ DL_BUTTON.addEventListener("click", async () =>
       if (res.complete)
       {
          window.open(`download?id=${id}`, "_self")
+         displayInfo()
          downloadEnd()
       }
       else
@@ -65,7 +67,86 @@ DL_BUTTON.addEventListener("click", async () =>
 })
 
 
+
+/*displayInfo(
+   {
+      "tracklist":
+      [
+         { "type": "episode", "id": "14VSmwCslwrJvi3PaSvhNM", },
+         { "type": "episode", "id": "3WErAlEzeADyzNLiIr8aXV", },
+         { "type": "episode", "id": "6RcYx5vypWSjcnat6YiJU6", },
+         { "type": "episode", "id": "5KgyL40hs5UXwyiJiYfNO9", }
+      ]
+   }
+)*/
 //downloadStart();let p=0,i=setInterval(()=>{downloadProgress(++p);if(p==100){clearInterval(i);downloadEnd()}}, 20 )
+
+
+
+function animate(el, animation)
+{
+   return new Promise(resolve =>
+   {
+      el.style.animation = "none";
+      el.offsetHeight;
+      el.style.animation = "none";
+
+      el.style.animation = animation;
+
+      el.addEventListener("animationend", function()
+      {
+         el.style.animation = "none";
+         resolve();
+      }, {once: true});
+   })
+};
+
+
+async function displayInfo(info={tracklist: []}, transitionSeconds=1)
+{
+   const TRACKLIST = document.getElementById("tracklist")
+
+
+   if (TRACKLIST.childNodes.length === 0)
+   {
+      animate(TRACKLIST, `slidein ${transitionSeconds}s normal ease-out`)
+      addEmbeds(info)
+   }
+   else
+   {
+      await animate(TRACKLIST, `slidein ${transitionSeconds}s reverse ease-in`)
+
+      TRACKLIST.textContent = ""
+      displayInfo(info)
+   }
+
+
+   function addEmbeds(info)
+   {
+      for (let track of info.tracklist)
+      {
+         const EMBED_OPTS =
+         {
+            class: "track",
+            src: `https://open.spotify.com/embed/${track.type}/${track.id}`,
+            width: "100%",
+            height: "152",
+            frameBorder: "0",
+            //allow: "encrypted-media",
+            loading: "lazy"
+         }
+
+         const IFRAME = document.createElement("iframe")
+
+         for (const [key, value] of Object.entries(EMBED_OPTS))
+         {
+            IFRAME.setAttribute(key, value)
+         }
+
+         TRACKLIST.append(IFRAME)
+      }
+   }
+}
 
 
 function downloadStart()

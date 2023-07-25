@@ -40,8 +40,12 @@ async function getQueryInfo(token, query, {searchType="track", searchCount=1, ma
       info.query = Object.values(info).flat().join(" ")
       info.content = `${info.name} - ${info.authors.join(", ")} (${info.album})`
 
-      info.id = item.id
+      info.cover = item.images?.[0].url ?? item.album.images[0].url
+
+      info.duration = item.duration_ms
       info.explicit = item.explicit
+      info.type = item.type
+      info.id = item.id
       info.url = item.external_urls.spotify
 
       return info
@@ -115,7 +119,7 @@ async function getQueryInfo(token, query, {searchType="track", searchCount=1, ma
 
             for (let item of album.tracks.items)
             {
-               item.album = {name: album.name}
+               item.album = album
                info.tracklist.push(getItemInfo(item, album))
             }
 
@@ -124,6 +128,7 @@ async function getQueryInfo(token, query, {searchType="track", searchCount=1, ma
          case "playlist":
             let playlist = await getRequest(token, `/playlists/${id}`)
 
+            info.cover = playlist.images[0].url
             info.content = `${playlist.name} - ${playlist.owner.display_name}`
 
             for (let item of playlist.tracks.items)
@@ -192,7 +197,7 @@ async function getQueryInfo(token, query, {searchType="track", searchCount=1, ma
 {
    console.time()
    const token = await getToken("0e10f546730a413eb13a28a6ffeaece4", "85c7a868f92849c6a9370c1406b665c8")
-   let info = await getQueryInfo(token.access_token, "https://open.spotify.com/track/6rDaCGqcQB1urhpCrrD599,6rDaCGqcQB1urhpCrrD599")
+   let info = await getQueryInfo(token.access_token, "https://open.spotify.com/episode/5ABQCt345LXOb0dKKM9LZx?si=56eedb17bf7f49f2")
    console.timeEnd()
 
    console.log(JSON.stringify(info, 0, 2));

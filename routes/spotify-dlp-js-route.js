@@ -9,7 +9,7 @@ const fs = require("fs")
 fs.rmSync("tracks", { recursive: true, force: true });
 fs.mkdirSync("tracks");
 
-const SpotifyAPI = require("./SpotAPI.js");
+const SpotifyAPI = require("./SpotifyAPI.js");
 const yts = require("yt-search");
 const ytdl = require("ytdl-core");
 const sanitize = require("sanitize-filename");
@@ -145,7 +145,7 @@ router.post("/", async (req, res) =>
 
    addInfoToIndex(info)
 
-   res.status(202).send({id: info.id})
+   res.status(202).send(info)
 
 
    simultaneousDownloads++
@@ -340,5 +340,7 @@ function youtubeDL(url, path, opts={}, events={ response: null, progress: null, 
 
 //console.clear()
 //setInterval(() => { console.clear(); console.log(index) }, 100)
+
+//let timeout = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 module.exports = router

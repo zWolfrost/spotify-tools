@@ -86,7 +86,7 @@ input[type="file"]
 
 #download-container
 {
-   padding: 50px;
+   padding: 0px 50px 0px 50px;
 }
 
 
@@ -154,3 +154,55 @@ button
 button:hover { background-color: #eeeeee; transform: scale(1.04); }
 button:active { background-color: #dddddd; transform: scale(1); }
 button:disabled { pointer-events: none; }
+
+
+#tracklist
+{
+   display: flex;
+   flex-flow: column nowrap;
+
+   margin: auto;
+   width: 60%;
+
+   padding: 20px;
+   margin-top: 25px;
+   margin-bottom: 25px;
+   gap: 20px;
+
+   border-radius: 15px;
+   background-color: black;
+   box-shadow: 0px 0px 10px 1px black;
+
+   overflow: hidden;
+}
+#tracklist:empty
+{
+   display: none;
+}
+@keyframes slidein
+{
+   from
+   {
+      max-height: 0px;
+      padding: 0px;
+      margin-top: 0px;
+      margin-bottom: 0px;
+      box-shadow: none;
+   }
+   to
+   {
+      max-height: 100%;
+   }
+}
+
+
+.track
+{
+   pointer-events: none;
+}
+
+
+#information
+{
+   padding: 5px;
+}
