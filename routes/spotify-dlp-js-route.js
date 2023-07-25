@@ -25,7 +25,7 @@ let simultaneousDownloads = 0
 
 async function getSpotifyToken()
 {
-   let spotifyToken = await SpotifyApi.getSpotifyToken(process.env.CLIENT_ID, process.env.CLIENT_SECRET)
+   let spotifyToken = await SpotifyApi.getToken(process.env.CLIENT_ID, process.env.CLIENT_SECRET)
    spotifyToken.expiring_date = Date.now() + (spotifyToken.expires_in * 1000)
    return spotifyToken
 }

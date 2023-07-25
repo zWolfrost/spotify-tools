@@ -1,12 +1,12 @@
 module.exports =
 {
-   getSpotifyToken,
+   getToken,
    getRequest,
    getQueryInfo
 }
 
 
-async function getSpotifyToken(client_id, client_secret)
+async function getToken(client_id, client_secret)
 {
    let request = {
       method: "POST",
@@ -21,23 +21,21 @@ async function getRequest(token, uri)
 {
    let request = {
       method: "GET",
-      headers: { "Authorization": "Bearer " + token }
+      headers: { "Authorization": `Bearer ${token}` }
    }
 
    return fetch("https://api.spotify.com/v1" + uri, request).then(res => res.json())
 }
 
-async function getQueryInfo(token, query, searchType="track", searchCount=1)
+async function getQueryInfo(token, query, {searchType="track", searchCount=1, market="US"}={})
 {
-   function itemInfo(item, album=null)
+   function getItemInfo(item)
    {
       let info = {
          name: item.name,
-         album: album?.name ?? item.album.name,
-         authors: []
+         album: item.album.name,
+         authors: item.artists.map(artist => artist.name)
       }
-
-      for (let artist of item.artists) info.authors.push(artist.name)
 
       info.query = Object.values(info).flat().join(" ")
       info.content = `${info.name} - ${info.authors.join(", ")} (${info.album})`
@@ -49,14 +47,14 @@ async function getQueryInfo(token, query, searchType="track", searchCount=1)
       return info
    }
 
-   function cleanUrl(url, begstr="spotify.com/", endstr="?")
+   function cleanUrl(url, begmk="spotify.com/", endmk="?")
    {
-      let beg = url.indexOf(begstr)
-      if (beg == -1) beg = 0
-      else beg += begstr.length
+      let beg = url.indexOf(begmk)
+      if (beg == -1) beg = undefined
+      else beg += begmk.length
 
-      let end = url.indexOf(endstr, beg)
-      if (end == -1) end = url.length
+      let end = url.indexOf(endmk, beg)
+      if (end == -1) end = undefined
 
       return url.slice(beg, end).split("/")
    }
@@ -66,7 +64,9 @@ async function getQueryInfo(token, query, searchType="track", searchCount=1)
 
    if (id === undefined)
    {
-      let result = await getRequest(token, `/search?q=${query}&type=${searchType}&limit=${searchCount}`)
+      let isSingleItem = (searchType == "track" || searchType == "episode")
+
+      let result = await getRequest(token, `/search?q=${query}&type=${searchType}&limit=${isSingleItem ? searchCount : 1}`)
 
       if ("error" in result) return result
 
@@ -75,90 +75,136 @@ async function getQueryInfo(token, query, searchType="track", searchCount=1)
       if (result.length == 0) return { error: { status: 400, message: "No results were found" } }
 
       type = searchType
-      id = result[0].id
+      id = isSingleItem ? result.map(item => item.id).join(",") : result[0].id
    }
 
 
    info = {
       id: id,
       type: type,
+      content: undefined,
       tracklist: []
    }
 
-   let result;
 
-   switch(type)
+   try
    {
-      case "album":
-         let album = await getRequest(token, `/albums/${id}`)
-         result = await getRequest(token, `/albums/${id}/tracks`)
+      switch(type)
+      {
+         case "artist":
+            let [artist, artistTracks] = await Promise.all(
+               [
+                  getRequest(token, `/artists/${id}`),
+                  getRequest(token, `/artists/${id}/top-tracks?market=${market}`)
+               ]
+            )
 
-         for (let item of result.items)
-         {
-            info.tracklist.push(itemInfo(item, album))
-         }
+            info.content = `${artist.name} - Top Tracks`
 
-         let albumartists = []
-         for (let artist of album.artists) albumartists.push(artist.name)
-         info.content = `${album.name} - ${albumartists.join(", ")}`
+            for (let item of artistTracks.tracks)
+            {
+               info.tracklist.push(getItemInfo(item))
+            }
 
-         break;
+            break;
 
-      case "artist":
-         let artist = await getRequest(token, `/artists/${id}`)
-         result = await getRequest(token, `/artists/${id}/top-tracks?market=US`)
+         case "album":
+            let album = await getRequest(token, `/albums/${id}`)
 
-         for (let item of result.tracks)
-         {
-            info.tracklist.push(itemInfo(item))
-         }
+            info.content = `${album.name} - ${album.artists.map(artist => artist.name).join(", ")}`
 
-         info.content = `${artist.name} - Top Tracks`
+            for (let item of album.tracks.items)
+            {
+               item.album = {name: album.name}
+               info.tracklist.push(getItemInfo(item, album))
+            }
 
-         break;
+            break;
 
-      case "playlist":
-         let playlist = await getRequest(token, `/playlists/${id}`)
-         result = await getRequest(token, `/playlists/${id}/tracks`)
+         case "playlist":
+            let playlist = await getRequest(token, `/playlists/${id}`)
 
-         for (let item of result.items)
-         {
-            info.tracklist.push(itemInfo(item.track))
-         }
+            info.content = `${playlist.name} - ${playlist.owner.display_name}`
 
-         info.content = `${playlist.name} - ${playlist.owner.display_name}`
+            for (let item of playlist.tracks.items)
+            {
+               info.tracklist.push(getItemInfo(item.track))
+            }
 
-         break;
+            break;
 
-      case "track":
-         result = await getRequest(token, `/tracks?ids=${id}`)
+         case "track":
+            let tracks = await getRequest(token, `/tracks?ids=${id}`)
 
-         for (let item of result.tracks)
-         {
-            info.tracklist.push(itemInfo(item))
-         }
+            info.content = "Custom Track List"
 
-         info.content = "Custom Track List"
+            for (let item of tracks.tracks)
+            {
+               info.tracklist.push(getItemInfo(item))
+            }
 
-         break;
+            break;
+
+
+         case "show":
+            let show = await getRequest(token, `/shows/${id}?market=${market}`)
+
+            info.content = `${show.name} - ${show.publisher}`
+
+            for (let item of show.episodes.items)
+            {
+               item.album = {name: show.name}
+               item.artists = [{name: show.publisher}]
+               info.tracklist.push(getItemInfo(item))
+            }
+
+            break;
+
+         case "episode":
+            let episodes = await getRequest(token, `/episodes?ids=${id}&market=${market}`)
+
+            info.content = `Custom Episode List`
+
+            for (let item of episodes.episodes)
+            {
+               item.album = {name: item.show.name}
+               item.artists = [{name: item.show.publisher}]
+               info.tracklist.push(getItemInfo(item))
+            }
+
+            break;
+
+
+         default: return { error: { status: 400, message: "Invalid or unsupported spotify link" } }
+      }
    }
+   catch
+   {
+      return { error: { status: 400, message: "Invalid spotify token and/or link" } }
+   }
+
 
    return info
 }
 
-/*
-async function a()
+
+/*async function a()
 {
-   const token = await getSpotifyToken("0e10f546730a413eb13a28a6ffeaece4", "85c7a868f92849c6a9370c1406b665c8")
-   let info = await getQueryInfo(token, "https://open.spotify.com/album/3DuiGV3J09SUhvp8gqNx8h?si=ReSEd1WYRge0g1P-7WgXuw")
-   console.log(info)
+   console.time()
+   const token = await getToken("0e10f546730a413eb13a28a6ffeaece4", "85c7a868f92849c6a9370c1406b665c8")
+   let info = await getQueryInfo(token.access_token, "https://open.spotify.com/track/6rDaCGqcQB1urhpCrrD599,6rDaCGqcQB1urhpCrrD599")
+   console.timeEnd()
+
+   console.log(JSON.stringify(info, 0, 2));
 }
-a()
-*/
+a()*/
+
 
 /*
 https://open.spotify.com/album/09wqWIOKWuS6RwjBrXe08B?si=3266fb2161824070
 https://open.spotify.com/artist/7jy3rLJdDQY21OgRLCZ9sD?si=4a55232349a94d48
+https://open.spotify.com/episode/5ABQCt345LXOb0dKKM9LZx?si=56eedb17bf7f49f2
 https://open.spotify.com/playlist/7mBgbujFe7cAZ5rrK0HTxp?si=82b3e3f2549641b5
-https://open.spotify.com/track/6rDaCGqcQB1urhpCrrD599?si=05987dc8f4ae4d31
+https://open.spotify.com/show/6TXzjtMTEopiGjIsCfvv6W?si=5ed6091c9683422b
+https://open.spotify.com/track/6rDaCGqcQB1urhpCrrD599,6rDaCGqcQB1urhpCrrD599
 */
