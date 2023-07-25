@@ -9,8 +9,8 @@ const fs = require("fs")
 fs.rmSync("tracks", { recursive: true, force: true });
 fs.mkdirSync("tracks");
 
-const SpotifyApi = require("./SpotifyApi.js");
-const { search } = require("libmuse");
+const SpotifyAPI = require("./SpotifyAPI.js");
+const yts = require("yt-search");
 const ytdl = require("ytdl-core");
 const sanitize = require("sanitize-filename");
 
@@ -18,6 +18,7 @@ const sanitize = require("sanitize-filename");
 const UPDATE_INTERVAL_SECONDS = 0.4
 const MAX_SIMULTANEOUS_DOWNLOADS = 10
 const MAX_TRACKLIST_LENGTH = 30
+const YTSEARCH_TAGS = ["hq", "audio"]
 
 let index = {}, token = {}
 let simultaneousDownloads = 0
@@ -25,7 +26,7 @@ let simultaneousDownloads = 0
 
 async function getSpotifyToken()
 {
-   let spotifyToken = await SpotifyApi.getToken(process.env.CLIENT_ID, process.env.CLIENT_SECRET)
+   let spotifyToken = await SpotifyAPI.getToken(process.env.CLIENT_ID, process.env.CLIENT_SECRET)
    spotifyToken.expiring_date = Date.now() + (spotifyToken.expires_in * 1000)
    return spotifyToken
 }
@@ -109,7 +110,7 @@ router.post("/", async (req, res) =>
       token = await getSpotifyToken()
    }
 
-   let info = await SpotifyApi.getQueryInfo(token.access_token, QUERY)
+   let info = await SpotifyAPI.getQueryInfo(token.access_token, QUERY)
 
 
    if ("error" in info)
@@ -217,12 +218,6 @@ router.post("/", async (req, res) =>
       }
    }
 
-   async function searchVideoIdFromQuery(query, limit=1)
-   {
-      let searchResult = await search(query, { limit: limit })
-      return searchResult.top_result.videoId ?? searchResult.categories[0].results[0].videoId
-   }
-
    function downloadTracklist(tracklist)
    {
       tracklist = structuredClone(tracklist)
@@ -231,7 +226,9 @@ router.post("/", async (req, res) =>
       {
          let track = tracklist.shift()
 
-         let videoID = await searchVideoIdFromQuery(track.query)
+         let searchVideoId = (query) => yts(query).then(res => res.videos[0].videoId);
+
+         let videoID = await searchVideoId(track.query + " " + YTSEARCH_TAGS.join(" "))
 
 
          youtubeDL(`https://youtu.be/${videoID}`, `./tracks/${index[track.id].filename}`, { filter: "audioonly" },
