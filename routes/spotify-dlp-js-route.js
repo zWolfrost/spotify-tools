@@ -9,7 +9,7 @@ const fs = require("fs")
 fs.rmSync("tracks", { recursive: true, force: true });
 fs.mkdirSync("tracks");
 
-const SpotifyAPI = require("./SpotifyAPI.js");
+const SpotifyAPI = require("./SpotAPI.js");
 const yts = require("yt-search");
 const ytdl = require("ytdl-core");
 const sanitize = require("sanitize-filename");
