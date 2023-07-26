@@ -59,22 +59,29 @@ router.get("/update", (req, res) =>
 {
    let begInfo = structuredClone(index[req.query.id])
 
-   let interval = setInterval(() =>
+   if (begInfo == undefined)
    {
-      let curInfo = index[req.query.id]
-
-      if (curInfo.progress !== begInfo.progress || curInfo.complete)
+      res.status(404).send({ error: "Track not found" })
+   }
+   else
+   {
+      let interval = setInterval(() =>
       {
-         res.status(200).send({
-            percent: curInfo.progress?.percent ?? 0,
-            remainingSeconds: curInfo.progress?.estimatedRemainingSeconds,
-            trackCount: curInfo.trackids?.length ?? 1,
-            complete: curInfo.complete,
-         })
+         let curInfo = index[req.query.id]
 
-         clearInterval(interval)
-      }
-   }, UPDATE_INTERVAL_SECONDS * 1000)
+         if (curInfo.progress !== begInfo.progress || curInfo.complete)
+         {
+            res.status(200).send({
+               percent: curInfo.progress?.percent ?? 0,
+               remainingSeconds: curInfo.progress?.estimatedRemainingSeconds,
+               trackCount: curInfo.trackids?.length ?? 1,
+               complete: curInfo.complete,
+            })
+
+            clearInterval(interval)
+         }
+      }, UPDATE_INTERVAL_SECONDS * 1000)
+   }
 })
 router.get("/download", (req, res) =>
 {
@@ -86,7 +93,7 @@ router.get("/download", (req, res) =>
    }
    else
    {
-      res.status(503).send({ error: "Service Unavailable" })
+      res.status(404).send({ error: "Track not found" })
    }
 })
 
@@ -145,13 +152,16 @@ router.post("/", async (req, res) =>
 
    addInfoToIndex(info)
 
-   res.status(202).send(info)
-
 
    simultaneousDownloads++
 
+   const isSingleTrack = (uniqueTracklist.length == 1)
+   if (isSingleTrack) info.id = info.tracklist[0].id
+
+   res.status(202).send(info)
+
    await downloadTracklist(uniqueTracklist)
-   if (uniqueTracklist.length !== 1) await zipTracklist(info)
+   if (isSingleTrack == false) await zipTracklist(info)
 
    console.log(uniqueTracklist.map(track => track.content))
 

@@ -78,7 +78,9 @@ DL_BUTTON.addEventListener("click", async () =>
          { "type": "episode", "id": "5KgyL40hs5UXwyiJiYfNO9", }
       ]
    }
-)*/
+)
+setTimeout(() => displayInfo(), 2000)*/
+
 //downloadStart();let p=0,i=setInterval(()=>{downloadProgress(++p);if(p==100){clearInterval(i);downloadEnd()}}, 20 )
 
 

@@ -27,7 +27,7 @@ async function getRequest(token, uri)
    return fetch("https://api.spotify.com/v1" + uri, request).then(res => res.json())
 }
 
-async function getQueryInfo(token, query, {searchType="track", searchCount=1, market="US"}={})
+async function getQueryInfo(token, query, {searchType="track", market="US"}={})
 {
    function getItemInfo(item)
    {
@@ -51,26 +51,22 @@ async function getQueryInfo(token, query, {searchType="track", searchCount=1, ma
       return info
    }
 
-   function cleanUrl(url, begmk="spotify.com/", endmk="?")
+   function cleanURL(url)
    {
-      let beg = url.indexOf(begmk)
-      if (beg == -1) beg = undefined
-      else beg += begmk.length
+      let endMark = url.indexOf("?")
+      endMark = endMark < 0 ? undefined : endMark
 
-      let end = url.indexOf(endmk, beg)
-      if (end == -1) end = undefined
-
-      return url.slice(beg, end).split("/")
+      let clean = url.slice(0, endMark).split("/").slice(-2)
+      if (clean[0] == url) return url.split(":").slice(-2)
+      else return clean
    }
 
 
-   let [type, id] = cleanUrl(query)
+   let [type, id] = cleanURL(query)
 
    if (id === undefined)
    {
-      let isSingleItem = (searchType == "track" || searchType == "episode")
-
-      let result = await getRequest(token, `/search?q=${query}&type=${searchType}&limit=${isSingleItem ? searchCount : 1}`)
+      let result = await getRequest(token, `/search?q=${query}&type=${searchType}&limit=1`)
 
       if ("error" in result) return result
 
@@ -78,15 +74,17 @@ async function getQueryInfo(token, query, {searchType="track", searchCount=1, ma
 
       if (result.length == 0) return { error: { status: 400, message: "No results were found" } }
 
-      type = searchType
-      id = isSingleItem ? result.map(item => item.id).join(",") : result[0].id
+      query = result[0].external_urls.spotify
    }
+
+   [type, id] = cleanURL(query)
 
 
    info = {
       id: id,
       type: type,
       content: undefined,
+      cover: undefined,
       tracklist: []
    }
 
@@ -103,6 +101,7 @@ async function getQueryInfo(token, query, {searchType="track", searchCount=1, ma
                ]
             )
 
+            info.cover = artist.images[0].url
             info.content = `${artist.name} - Top Tracks`
 
             for (let item of artistTracks.tracks)
@@ -115,6 +114,7 @@ async function getQueryInfo(token, query, {searchType="track", searchCount=1, ma
          case "album":
             let album = await getRequest(token, `/albums/${id}`)
 
+            info.cover = album.images[0].url
             info.content = `${album.name} - ${album.artists.map(artist => artist.name).join(", ")}`
 
             for (let item of album.tracks.items)
@@ -154,6 +154,7 @@ async function getQueryInfo(token, query, {searchType="track", searchCount=1, ma
          case "show":
             let show = await getRequest(token, `/shows/${id}?market=${market}`)
 
+            info.cover = show.images[0].url
             info.content = `${show.name} - ${show.publisher}`
 
             for (let item of show.episodes.items)
@@ -180,12 +181,12 @@ async function getQueryInfo(token, query, {searchType="track", searchCount=1, ma
             break;
 
 
-         default: return { error: { status: 400, message: "Invalid or unsupported spotify link" } }
+         default: return { error: { status: 400, message: "Invalid or unsupported spotify url" } }
       }
    }
    catch
    {
-      return { error: { status: 400, message: "Invalid spotify token and/or link" } }
+      return { error: { status: 400, message: "Invalid arguments" } }
    }
 
 
@@ -193,16 +194,16 @@ async function getQueryInfo(token, query, {searchType="track", searchCount=1, ma
 }
 
 
-/*async function a()
-{
-   console.time()
-   const token = await getToken("0e10f546730a413eb13a28a6ffeaece4", "85c7a868f92849c6a9370c1406b665c8")
-   let info = await getQueryInfo(token.access_token, "https://open.spotify.com/episode/5ABQCt345LXOb0dKKM9LZx?si=56eedb17bf7f49f2")
-   console.timeEnd()
-
-   console.log(JSON.stringify(info, 0, 2));
-}
-a()*/
+//(async()=>{
+//
+//console.time()
+//const token = await getToken("0e10f546730a413eb13a28a6ffeaece4", "85c7a868f92849c6a9370c1406b665c8")
+//let info = await getQueryInfo(token.access_token, "https://open.spotify.com/track/77zFWS72lSKMaTkmjlYSYz?si=7258e959491d440a")
+//console.timeEnd()
+//
+//console.log(JSON.stringify(info, 0, 2));
+//
+//})()
 
 
 /*

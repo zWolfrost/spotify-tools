@@ -175,10 +175,7 @@ button:disabled { pointer-events: none; }
 
    overflow: hidden;
 }
-#tracklist:empty
-{
-   display: none;
-}
+#tracklist:empty { display: none; }
 @keyframes slidein
 {
    from
