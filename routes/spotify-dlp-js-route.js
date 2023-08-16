@@ -9,7 +9,7 @@ const fs = require("fs")
 fs.rmSync("tracks", { recursive: true, force: true });
 fs.mkdirSync("tracks");
 
-const SpotifyAPI = require("./SpotifyAPI.js");
+const SpotifyAPI = require("spoteasy");
 const yts = require("yt-search");
 const ytdl = require("ytdl-core");
 const sanitize = require("sanitize-filename");
@@ -20,16 +20,13 @@ const MAX_SIMULTANEOUS_DOWNLOADS = 10
 const MAX_TRACKLIST_LENGTH = 30
 const YTSEARCH_TAGS = ["hq", "audio"]
 
-let index = {}, token = {}
+let index = {}
 let simultaneousDownloads = 0
 
+let spoteasy = new SpotifyAPI()
+spoteasy.clientCredentialsFlow(process.env.CLIENT_ID, process.env.CLIENT_SECRET)
 
-async function getSpotifyToken()
-{
-   let spotifyToken = await SpotifyAPI.getToken(process.env.CLIENT_ID, process.env.CLIENT_SECRET)
-   spotifyToken.expiring_date = Date.now() + (spotifyToken.expires_in * 1000)
-   return spotifyToken
-}
+
 function safeDeleteItem(itemID, timeout=180)
 {
    let wasComplete = false
@@ -99,6 +96,7 @@ router.get("/download", (req, res) =>
 
 router.get("/", (req, res) => res.sendFile( path.resolve("static", "spotify-dlp-js", "spotify-dlp-js.html") ))
 
+
 router.post("/", async (req, res) =>
 {
    if (simultaneousDownloads+1 > MAX_SIMULTANEOUS_DOWNLOADS)
@@ -112,26 +110,62 @@ router.post("/", async (req, res) =>
    const TRIM_INDEXES = req.body.trim?.map(n => parseInt(n) || undefined) || [undefined, undefined]
 
 
-   if (token.expiring_date == undefined || Date.now() >= token.expiring_date)
+   let info;
+
+   try
    {
-      token = await getSpotifyToken()
+      info = await spoteasy.getMagic(QUERY)
+   }
+   catch ( e )
+   {
+      res.status(400).send({ error: e.message })
+      return;
    }
 
-   let info = await SpotifyAPI.getQueryInfo(token.access_token, QUERY)
 
-
-   if ("error" in info)
+   if (SpotifyAPI.isValidURL(QUERY))
    {
-      res.status(info.error.status).send({ error: info.error.message })
-      return;
+      let {id, type} = SpotifyAPI.parseURL(QUERY)
+
+      info.id = id
+
+      switch(type)
+      {
+         case "artist":
+            let artist = await spoteasy.getArtist(id)
+            info.content = `${artist.name} - Top Tracks`
+            break;
+
+         case "album":
+            info.content = `${info.name} - ${info.artists.map(artist => artist.name).join(", ")}`
+            break;
+
+         case "playlist":
+            info.content = `${info.name} - ${info.owner.display_name}`
+            break;
+
+         case "track":
+            info.content = "Custom Track List"
+            break;
+
+         case "show":
+            info.content = `${info.name} - ${info.publisher}`
+            break;
+
+         case "episode":
+            info.content = `Custom Episode List`
+            break;
+
+         default: info.content = `Custom Item List`
+      }
    }
 
 
    let uniqueTracklist;
    try
    {
-      info.tracklist = info.tracklist.slice(...TRIM_INDEXES)
-      uniqueTracklist = Object.values( info.tracklist.reduce((track, obj) => ({ ...track, [obj.id]: obj }), {}) );
+      info.parsed_tracks = info.parsed_tracks.slice(...TRIM_INDEXES)
+      uniqueTracklist = Object.values( info.parsed_tracks.reduce((track, obj) => ({ ...track, [obj.id]: obj }), {}) );
    }
    catch
    {
@@ -139,7 +173,7 @@ router.post("/", async (req, res) =>
       return;
    }
 
-   if (info.tracklist.length == 0 || uniqueTracklist.length == 0)
+   if (uniqueTracklist.length == 0)
    {
       res.status(400).send({ error: "Tracklist contains no tracks" })
       return;
@@ -156,33 +190,33 @@ router.post("/", async (req, res) =>
    simultaneousDownloads++
 
    const isSingleTrack = (uniqueTracklist.length == 1)
-   if (isSingleTrack) info.id = info.tracklist[0].id
+   if (isSingleTrack) info.id = info.parsed_tracks[0].id
 
    res.status(202).send(info)
 
+   await addYTIDsToTracklist(uniqueTracklist)
    await downloadTracklist(uniqueTracklist)
    if (isSingleTrack == false) await zipTracklist(info)
 
-   console.log(uniqueTracklist.map(track => track.content))
-
    simultaneousDownloads--
+
 
 
    function addInfoToIndex(info, formats={audio: "m4a", archive: "zip"})
    {
       let trackids = []
-      for (let track of info.tracklist)
+      for (let track of info.parsed_tracks)
       {
          trackids.push(track.id)
 
          index[track.id] =
          {
-            filename: `${sanitize(track.content)}.${formats.audio}`,
+            filename: `${sanitize(track.title)}.${formats.audio}`,
             complete: false
          }
       }
 
-      if (info.tracklist.length == 1) return
+      if (info.parsed_tracks.length == 1) return
 
       index[info.id] =
       {
@@ -228,6 +262,15 @@ router.post("/", async (req, res) =>
       }
    }
 
+   function addYTIDsToTracklist(tracklist)
+   {
+      let searchVideoId = (query) => yts(query).then(res => res.videos[0].videoId);
+
+      let requests = tracklist.map(async track => track.youtube_id = await searchVideoId(`${track.query} ${YTSEARCH_TAGS.join(" ")}`))
+
+      return Promise.all(requests)
+   }
+
    function downloadTracklist(tracklist)
    {
       tracklist = structuredClone(tracklist)
@@ -236,12 +279,7 @@ router.post("/", async (req, res) =>
       {
          let track = tracklist.shift()
 
-         let searchVideoId = (query) => yts(query).then(res => res.videos[0].videoId);
-
-         let videoID = await searchVideoId(track.query + " " + YTSEARCH_TAGS.join(" "))
-
-
-         youtubeDL(`https://youtu.be/${videoID}`, `./tracks/${index[track.id].filename}`, { filter: "audioonly" },
+         youtubeDL(`https://youtu.be/${track.youtube_id}`, `./tracks/${index[track.id].filename}`, { filter: "audioonly" },
             {
                progress: function(progress)
                {
@@ -266,7 +304,7 @@ router.post("/", async (req, res) =>
       return new Promise(async resolve =>
       {
          let filepaths = []
-         for (let track of info.tracklist)
+         for (let track of info.parsed_tracks)
          {
             filepaths.push( path.resolve("tracks", index[track.id].filename) )
          }

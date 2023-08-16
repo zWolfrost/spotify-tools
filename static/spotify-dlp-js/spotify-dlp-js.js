@@ -155,15 +155,30 @@ function downloadStart()
 {
    DL_QUERY.value = ""
    TRIM_INDEXES.value = ""
-   DL_BUTTON.innerText = "Downloading..."
+   DL_BUTTON.innerText = "Processing Request..."
 
    inputsAreDisabled(true)
 }
 function downloadProgress(percent, remainingSeconds, totalCount=1)
 {
+   function secondsToHms(d)
+   {
+      let h = Math.floor(d / 3600);
+      let m = Math.floor(d % 3600 / 60);
+      let s = Math.floor(d % 3600 % 60);
+
+      let hDisplay = h>0 ? h+"h" : "";
+      let mDisplay = m>0 ? m+"m" : "";
+      let sDisplay = s>0 ? s+"s" : "";
+
+      return `${hDisplay} ${mDisplay} ${sDisplay}`;
+   }
+
    DL_QUERY.style.setProperty("--progress-percent", percent + "%");
-   TRIM_INDEXES.value = remainingSeconds === null ? "" : `${remainingSeconds?.toFixed(2)}s`
-   DL_BUTTON.innerText = `Downloading... (${Math.floor(totalCount*percent/100)}/${totalCount})`
+   TRIM_INDEXES.value = remainingSeconds ? `${secondsToHms(remainingSeconds.toFixed(2))}` : ""
+
+   if (percent % (100/totalCount) == 0) DL_BUTTON.innerText = `Initializing Download...`
+   else DL_BUTTON.innerText = `Downloading... (${Math.floor(totalCount*percent/100)}/${totalCount})`
 }
 function downloadEnd()
 {
