@@ -1,9 +1,7 @@
 const DL_QUERY = document.getElementById("download-field")
 const DL_BUTTON = document.getElementById("download-button")
 const TRIM_INDEXES = document.getElementById("trim-indexes")
-
-
-const url = window.location.href
+const TRACKLIST = document.getElementsByClassName("tracklist")[0]
 
 
 DL_QUERY.addEventListener("keypress", function(e)
@@ -23,7 +21,7 @@ DL_BUTTON.addEventListener("click", async () =>
    downloadStart()
 
 
-   let info = await fetch(url, {
+   let info = await fetch("request", {
       method: "POST",
       headers: {
          "Content-Type": "application/json",
@@ -43,7 +41,7 @@ DL_BUTTON.addEventListener("click", async () =>
    }
    else
    {
-      displayInfo(info)
+      displayTracklist(info.parsed_tracks)
       recursiveCheckID(info.id)
    }
 
@@ -56,7 +54,7 @@ DL_BUTTON.addEventListener("click", async () =>
       if (res.complete)
       {
          window.open(`download?id=${id}`, "_self")
-         displayInfo()
+         displayTracklist()
          downloadEnd()
       }
       else
@@ -68,86 +66,49 @@ DL_BUTTON.addEventListener("click", async () =>
 
 
 
-/*displayInfo(
-   {
-      "tracklist":
-      [
-         { "type": "episode", "id": "14VSmwCslwrJvi3PaSvhNM", },
-         { "type": "episode", "id": "3WErAlEzeADyzNLiIr8aXV", },
-         { "type": "episode", "id": "6RcYx5vypWSjcnat6YiJU6", },
-         { "type": "episode", "id": "5KgyL40hs5UXwyiJiYfNO9", }
-      ]
-   }
-)
-setTimeout(() => displayInfo(), 2000)*/
-
-//downloadStart();let p=0,i=setInterval(()=>{downloadProgress(++p);if(p==100){clearInterval(i);downloadEnd()}}, 20 )
-
-
-
-function animate(el, animation)
+function displayTracklist(tracklist=[])
 {
-   return new Promise(resolve =>
+   if (TRACKLIST.childNodes.length === 0 && tracklist.length > 0)
    {
-      el.style.animation = "none";
-      el.offsetHeight;
-      el.style.animation = "none";
-
-      el.style.animation = animation;
-
-      el.addEventListener("animationend", function()
+      for (const track of tracklist)
       {
-         el.style.animation = "none";
-         resolve();
-      }, {once: true});
-   })
-};
-
-
-async function displayInfo(info={tracklist: []}, transitionSeconds=1)
-{
-   const TRACKLIST = document.getElementById("tracklist")
-
-
-   if (TRACKLIST.childNodes.length === 0)
-   {
-      animate(TRACKLIST, `slidein ${transitionSeconds}s normal ease-out`)
-      addEmbeds(info)
-   }
-   else
-   {
-      await animate(TRACKLIST, `slidein ${transitionSeconds}s reverse ease-in`)
-
-      TRACKLIST.textContent = ""
-      displayInfo(info)
-   }
-
-
-   function addEmbeds(info)
-   {
-      for (let track of info.tracklist)
-      {
-         const EMBED_OPTS =
-         {
-            class: "track",
-            src: `https://open.spotify.com/embed/${track.type}/${track.id}`,
-            width: "100%",
-            height: "152",
-            frameBorder: "0",
-            //allow: "encrypted-media",
-            loading: "lazy"
-         }
-
-         const IFRAME = document.createElement("iframe")
-
-         for (const [key, value] of Object.entries(EMBED_OPTS))
-         {
-            IFRAME.setAttribute(key, value)
-         }
-
-         TRACKLIST.append(IFRAME)
+         TRACKLIST.appendChild(createSpotifyEmbed(track))
       }
+
+      TRACKLIST.classList.add("open")
    }
+   else if (TRACKLIST.classList.contains("open"))
+   {
+      TRACKLIST.classList.remove("open")
+
+      TRACKLIST.addEventListener("transitionend", () =>
+      {
+         TRACKLIST.textContent = ""
+         displayTracklist(tracklist)
+      }, {once: true})
+   }
+}
+function createSpotifyEmbed(track)
+{
+   const EMBED_OPTS =
+   {
+      class: "track",
+      src: `https://open.spotify.com/embed/${track.type}/${track.id}`,
+      width: "100%",
+      height: "80",
+      frameBorder: "0",
+      //allow: "encrypted-media",
+      loading: "lazy"
+   }
+
+   const IFRAME = document.createElement("iframe")
+
+   for (const [key, value] of Object.entries(EMBED_OPTS))
+   {
+      IFRAME.setAttribute(key, value)
+   }
+
+   return IFRAME
 }
 
 
@@ -157,7 +118,7 @@ function downloadStart()
    TRIM_INDEXES.value = ""
    DL_BUTTON.innerText = "Processing Request..."
 
-   inputsAreDisabled(true)
+   disableInputs(true)
 }
 function downloadProgress(percent, remainingSeconds, totalCount=1)
 {
@@ -187,7 +148,7 @@ function downloadEnd()
    TRIM_INDEXES.value = ""
    DL_BUTTON.innerText = "Download"
 
-   inputsAreDisabled(false)
+   disableInputs(false)
 }
 
 function setMessage(message, timeout=2)
@@ -207,7 +168,7 @@ function setMessage(message, timeout=2)
    }, timeout*1000)
 }
 
-function inputsAreDisabled(disabled)
+function disableInputs(disabled)
 {
    DL_QUERY.disabled = disabled
    TRIM_INDEXES.disabled = disabled

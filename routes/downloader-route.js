@@ -94,10 +94,8 @@ router.get("/download", (req, res) =>
    }
 })
 
-router.get("/", (req, res) => res.sendFile( path.resolve("static", "spotify-dlp-js", "spotify-dlp-js.html") ))
 
-
-router.post("/", async (req, res) =>
+router.post("/request", async (req, res) =>
 {
    if (simultaneousDownloads+1 > MAX_SIMULTANEOUS_DOWNLOADS)
    {

@@ -1,0 +1,95 @@
+<html>
+   <head>
+      <title>Spotify Downloader</title>
+      <link rel="stylesheet" href="../style.css">
+      <script defer src="script.js"></script>
+      <script defer src="../assets.js"></script>
+
+      <style>
+         #download-options
+         {
+            display: flex;
+            margin: auto;
+            gap: 20px;
+            justify-content: center;
+            align-items: center
+         }
+
+         #placeholder, #trim-indexes
+         {
+            width: 200px;
+            height: 40px;
+         }
+
+         #download-field
+         {
+            --loading-image: url(assets/spotify_icon_rotated.png);
+            --progress-percent: 0%;
+
+            flex: 1;
+            max-width: 2000px;
+
+            font-size: 22px;
+            padding: 14px;
+
+            background:
+               linear-gradient( 90deg, transparent var(--progress-percent), white var(--progress-percent) ),
+               repeat-x var(--loading-image) 0px -125px / 150px;
+               /*repeating-linear-gradient( 135deg, var(--spotify-green), var(--spotify-green) 16px, black 16px, black 20px );*/
+         }
+         #download-field:disabled::placeholder
+         {
+            color: transparent;
+         }
+      </style>
+   </head>
+
+   <body>
+      <nav>
+         <a href="/">Home</a>
+         <a href="/downloader">Downloader</a>
+         <a href="/recommender">Recommender</a>
+         <a href="/auth">Login</a>
+
+         <img id="user-icon" alt="User Icon">
+      </nav>
+
+      <header>
+         <h1>Spotify Downloader</h1>
+         <h5>only PURE functionality!</h5>
+      </header>
+
+      <main>
+
+         <div id="download-options" style="padding: 0px 50px;">
+
+            <!--<select id="audio-format">
+               <option value="m4a" selected>.m4a</option>
+               <option value="mp3">.mp3</option>
+            </select>-->
+            <div id="placeholder" style="width: 200px;"></div>
+
+            <input id="download-field" type="text" maxlength="100" autocomplete="off" placeholder="Enter a track name or any spotify link of a playlist, artist, album..."/>
+
+            <input id="trim-indexes" class="trim-index" type="text" placeholder="<START>:<END>" >
+
+         </div>
+
+         <button id="download-button">Download</button>
+
+         <div class="tracklist"></div>
+
+         <div style="padding: 5px;">
+            <p>
+               This script <b>WILL TRY HIS BEST</b> to match the spotify songs you've given on youtube music.<br>
+               It's pretty accurate though, so don't worry about that.
+            </p>
+            <p>
+               Also, of course, if you want the full playlist, leave the slicing options blank.<br>
+               If you do want to slice it though, remember that the slicing options are 0-based<br>
+               So, for example: if you want from the 4th to the 6th song in a playlist, you should type in "3:6"<br>
+            </p>
+         </div>
+      </main>
+   </body>
+</html>
