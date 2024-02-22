@@ -11,7 +11,7 @@ router.get("/icon", async (req, res) =>
       spoteasy.setToken(JSON.parse(req.cookies.auth))
 
       const me = await spoteasy.getCurrentUserProfile()
-      const iconUrl = me.images[0].url
+      const iconUrl = me.images?.[0].url
 
       res.status(200).send({ url: iconUrl })
    }
