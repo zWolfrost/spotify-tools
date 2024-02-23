@@ -17,7 +17,7 @@ app.use(cookieParser())
 
 
 app.use("/downloader", require(path.join(routesDIR, "downloader-route")) )
-app.use("/recommender", require(path.join(routesDIR, "recommender-route")) )
+app.use("/create-liked-playlist", require(path.join(routesDIR, "create-liked-playlist-route")) )
 app.use("/auth", require(path.join(routesDIR, "auth-route")) )
 app.use("/assets", require(path.join(routesDIR, "assets-route")) )
 

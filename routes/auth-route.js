@@ -15,8 +15,8 @@ router.get("/", async (req, res) =>
    {
       let url = spoteasy.authorizationCodePKCEFlow(
          process.env.CLIENT_ID,
-         "https://spotify-dlp-js.onrender.com/auth",
-         { scope: ["user-library-read"] }
+         "http://localhost:3000/auth",
+         { scope: ["user-library-read", "playlist-modify-private"] }
       )
 
       res.redirect(url)
